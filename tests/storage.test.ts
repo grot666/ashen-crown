@@ -12,7 +12,7 @@ describe('versioned campaign storage', () => {
   });
   it('rejects invalid versions, impossible turns, forged units, duplicate positions and altered maps', () => {
     const invalid = [
-      null, {}, { ...createGame(), version: 2 }, { ...createGame(), turn: 8 },
+      null, {}, { ...createGame(), version: 1 }, { ...createGame(), version: 3 }, { ...createGame(), turn: 8 },
       { ...createGame(), winner: 'unknown' }, { ...createGame(), mode: 'multiplayer' },
     ];
     const hp = createGame(); hp.units[0].hp = 100000;

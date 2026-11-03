@@ -1,4 +1,4 @@
-import { factionOf } from './engine/game';
+import { factionOf, maxHp, nameOf } from './engine/game';
 import { UNITS } from './engine/content';
 import type { Faction, Unit } from './engine/types';
 
@@ -28,17 +28,29 @@ export function crest(faction: Faction, className = ''): string {
   </svg>`;
 }
 
+function totemArt(large: boolean): string {
+  return `<svg viewBox="0 0 120 130" width="120" height="130" class="${large ? 'portrait-large' : 'portrait'}" aria-hidden="true">
+    <path d="m60 5 47 28v57l-47 34-47-34V33Z" fill="#3c3528"/>
+    <path d="M22 100h76l-6 14H28Z" fill="#5c4a30"/><circle cx="36" cy="116" r="9" fill="#2b261c" stroke="#a48a5c" stroke-width="3"/><circle cx="84" cy="116" r="9" fill="#2b261c" stroke="#a48a5c" stroke-width="3"/>
+    <path d="M48 100V36h24v64Z" fill="#79745b"/><path d="m44 36 16-14 16 14Z" fill="#aaa086"/>
+    <path d="m52 52 8-6 8 6m-16 16 8-6 8 6m-16 16 8-6 8 6" fill="none" stroke="#3c3528" stroke-width="3"/>
+    <path d="M60 4c-8 10-6 16 0 20 6-4 8-10 0-20Z" fill="#e3a65a"/><path d="M60 10c-3 5-2 8 0 10 2-2 3-5 0-10Z" fill="#f4d58e"/>
+  </svg>`;
+}
+
+/** Face/species follows the unit kind; banner colours follow the owner, so recruits read as allies. */
 export function portrait(unit: Unit, large = false): string {
-  const faction = factionOf(unit);
-  const elf = faction === 'elf';
   const kind = unit.kind;
+  if (kind === 'totem') return totemArt(large);
+  const elf = UNITS[kind].faction === 'elf';
+  const ownerElf = factionOf(unit) === 'elf';
   const caster = kind === 'shaman' || kind === 'oracle';
   const ranger = kind === 'ranger';
-  const armored = ['warlord', 'brute', 'warden'].includes(kind);
+  const armored = ['warlord', 'brute', 'warden', 'regent'].includes(kind);
   const skin = elf ? '#b7c8b3' : '#87926b';
   return `<svg viewBox="0 0 120 130" width="120" height="130" class="${large ? 'portrait-large' : 'portrait'}" aria-hidden="true">
-    <path d="m60 5 47 28v57l-47 34-47-34V33Z" fill="${elf ? '#233d35' : '#3c3528'}"/>
-    <path d="M14 110 30 88l20-8h20l20 8 16 22v20H14Z" fill="${elf ? '#344d43' : '#4a4937'}"/>
+    <path d="m60 5 47 28v57l-47 34-47-34V33Z" fill="${ownerElf ? '#233d35' : '#3c3528'}"/>
+    <path d="M14 110 30 88l20-8h20l20 8 16 22v20H14Z" fill="${ownerElf ? '#344d43' : '#4a4937'}"/>
     <path d="m26 92 18-9 16 18 16-18 18 9-8 31H34Z" fill="${elf ? '#788779' : '#79745b'}"/>
     <path d="M49 73h22v20l-11 8-11-8Z" fill="${skin}"/>
     <path d="${elf ? 'M34 38 60 22l26 16-4 33-22 18-22-18Z' : 'M33 35 60 23l27 12 3 34-18 17H48L30 69Z'}" fill="${skin}"/>
@@ -50,10 +62,11 @@ export function portrait(unit: Unit, large = false): string {
     ${armored ? `<path d="m31 38 5-14 16-7 8-12 8 12 16 7 5 14-29-8Z" fill="${elf ? '#a7ab8e' : '#aaa086'}"/><path d="M60 10v24" stroke="#e0ca98" stroke-width="2"/><path d="m20 91 19-7 5 21-24-3m80-11-19-7-5 21 24-3" fill="${elf ? '#959e83' : '#89836c'}"/>` : ''}
     ${caster ? `<path d="m30 47 2-20L60 9l28 18 2 20-30-13Z" fill="${elf ? '#63766a' : '#796b4e'}"/><path d="m60 16 5 10-5 8-5-8Z" fill="${elf ? '#b9daca' : '#e3b875'}"/><path d="M94 120V52m-7 0 7-13 7 13-7 10Z" fill="none" stroke="#c5b98d" stroke-width="3"/>` : ''}
     ${ranger ? '<path d="M29 48C20 0 100 0 91 48L78 29H42Z" fill="#556a55"/><path d="M96 62q22 28 0 58M96 62v58" fill="none" stroke="#c7b98c" stroke-width="3"/>' : ''}
-    <path d="m47 108 13 8 13-8-13 17Z" fill="${elf ? '#bdd1b7' : '#c9ae76'}" opacity=".7"/>
+    ${kind === 'regent' ? '<path d="m36 22 8-14 8 9 8-13 8 13 8-9 8 14Z" fill="#d9c98f" stroke="#f1e2a8" stroke-width="1.5"/>' : ''}
+    <path d="m47 108 13 8 13-8-13 17Z" fill="${ownerElf ? '#bdd1b7' : '#c9ae76'}" opacity=".7"/>
   </svg>`;
 }
 
 export function unitLabel(unit: Unit): string {
-  return `${UNITS[unit.kind].name}，生命 ${unit.hp}/${UNITS[unit.kind].hp}，行动点 ${unit.ap}`;
+  return `${nameOf(unit)}，生命 ${unit.hp}/${maxHp(unit)}，行动点 ${unit.ap}`;
 }

@@ -46,4 +46,17 @@ export const UNITS: Record<UnitKind, UnitDefinition> = {
     name: '黯月先知', role: '支援 / 战地治疗', faction: 'elf', hp: 22, attack: 6, armor: 1, range: 2, ap: 3, attackCost: 2,
     skill: { name: '月泉祷言', description: '为 3 格内的友军或自身恢复 12 点生命，不超过上限。', effect: 'heal', range: 3, power: 12, cost: 2, cooldown: 2 },
   },
+  regent: {
+    name: '暮誓摄政', role: '首领 / 长夜审判者', faction: 'elf', hp: 46, attack: 10, armor: 3, range: 2, ap: 3, attackCost: 2,
+    skill: { name: '长夜审判', description: '对 3 格内的敌人降下 15 点基础伤害，无视防御。每个己方回合开始时恢复 4 点生命。', effect: 'damage', range: 3, power: 15, cost: 2, cooldown: 2 },
+  },
+  totem: {
+    name: '灰烬图腾车', role: '护送目标 / 移动祭坛', faction: 'orc', hp: 32, attack: 4, armor: 3, range: 1, ap: 3, attackCost: 2,
+    skill: { name: '余烬庇护', description: '为 1 格内的友军或自身恢复 8 点生命。图腾车倒下即任务失败。', effect: 'heal', range: 1, power: 8, cost: 2, cooldown: 3 },
+  },
+};
+
+export const STATUS_NAMES: Record<'slowed' | 'regen', { name: string; description: string }> = {
+  slowed: { name: '迟滞', description: '下个己方回合 AP −1' },
+  regen: { name: '长夜复苏', description: '己方回合开始时恢复 4 生命' },
 };

@@ -1,6 +1,6 @@
 import { portrait, unitLabel } from './art';
 import { TERRAIN, UNITS } from './engine/content';
-import { canAttack, canSkill, factionOf, living, reachable } from './engine/game';
+import { canAttack, canSkill, factionOf, isCampaign, living, maxAp, maxHp, reachable, scenarioFor } from './engine/game';
 import { equal, key, pixel } from './engine/hex';
 import type { GameState, Terrain, Unit } from './engine/types';
 
@@ -24,7 +24,12 @@ export function renderBoard(state: GameState, options: BoardOptions): string {
   const { selected, skill, coordinates, interactive } = options;
   const moves = selected && factionOf(selected) === state.active && interactive && !skill ? reachable(state, selected) : new Map<string, number>();
   const targets = selected && interactive ? living(state).filter(t => skill ? canSkill(state, selected, t) : canAttack(state, selected, t)) : [];
-  return `<svg class="battle-map" viewBox="0 0 800 680" role="group" aria-label="黑棘隘口六角战场，点击单位选择，点击高亮格移动，点击红色目标攻击">
+  const scenario = scenarioFor(state);
+  const scale = 4 / scenario.radius;
+  const altar = scenario.objective.altar;
+  const goals = scenario.objective.goal ?? [];
+  const campaign = isCampaign(state);
+  return `<svg class="battle-map" viewBox="0 0 800 680" role="group" aria-label="${scenario.name}六角战场，点击单位选择，点击高亮格移动，点击红色目标攻击">
     <defs>
       <radialGradient id="ground"><stop stop-color="#455344" stop-opacity=".3"/><stop offset="1" stop-color="#1b241e" stop-opacity="0"/></radialGradient>
       <linearGradient id="tile-plain" x2=".6" y2="1"><stop stop-color="#46513d"/><stop offset="1" stop-color="#374535"/></linearGradient>
@@ -41,8 +46,8 @@ export function renderBoard(state: GameState, options: BoardOptions): string {
     </g>
     <text x="400" y="46" text-anchor="middle" class="map-direction">N</text>
     <text x="76" y="605" class="map-place">THE ASHEN MARCHES</text>
-    <text x="724" y="605" text-anchor="end" class="map-place">BLACKTHORN PASS · IV</text>
-    <g transform="translate(400 333)">
+    <text x="724" y="605" text-anchor="end" class="map-place">${scenario.english.toUpperCase()}${campaign ? '' : ' · IV'}</text>
+    <g transform="translate(400 333) scale(${scale})">
       ${state.tiles.map((tile, i) => {
         const { x, y } = pixel(tile);
         const reachableCost = moves.get(key(tile));
@@ -52,6 +57,8 @@ export function renderBoard(state: GameState, options: BoardOptions): string {
           <polygon points="${points}" transform="translate(0 5)" fill="#17261d" stroke="#17231c" stroke-width="2"/>
           <polygon class="tile-surface" points="${points}" fill="url(#tile-${tile.terrain})" stroke="#7d8564" stroke-opacity=".36" stroke-width="1"/>
           <g class="terrain-art" pointer-events="none">${terrainArt(tile.terrain, i)}</g>
+          ${altar && equal(altar, tile) ? '<g class="altar-mark" pointer-events="none"><circle r="27" fill="none" stroke="#9fd0c0" stroke-width="2" stroke-dasharray="4 5"/><circle r="11" fill="#9fd0c055"/><path d="M0-9v18M-9 0h18" stroke="#d8f0e6" stroke-width="1.5"/></g>' : ''}
+          ${goals.some(g => equal(g, tile)) ? '<g class="goal-mark" pointer-events="none"><polygon points="' + points + '" transform="scale(.82)" fill="#e2c59022" stroke="#e2c590" stroke-width="2" stroke-dasharray="5 4"/><path d="M-6 8V-12l14 4-14 5" fill="#e2c590"/></g>' : ''}
           ${reachableCost !== undefined ? `<polygon class="move-overlay" points="${points}"/><text class="move-cost" x="0" y="7" text-anchor="middle">${reachableCost}<tspan font-size="8" dx="2">AP</tspan></text>` : ''}
           ${selectedTile ? `<polygon class="selection-ring" points="${points}"/>` : ''}
           ${coordinates ? `<text class="coordinate" x="0" y="32" text-anchor="middle">${key(tile)}</text>` : ''}
@@ -61,15 +68,21 @@ export function renderBoard(state: GameState, options: BoardOptions): string {
         const def = UNITS[unit.kind];
         const { x, y } = pixel(unit);
         const target = targets.some(t => t.id === unit.id);
-        return `<g transform="translate(${x} ${y})" class="map-unit ${factionOf(unit)} ${selected?.id === unit.id ? 'chosen' : ''} ${target ? (skill && def.faction === state.active ? 'heal-target' : 'attack-target') : ''} ${unit.ap < def.attackCost ? 'spent' : ''}" data-hex="${key(unit)}" role="button" tabindex="0" aria-label="${unitLabel(unit)}${target ? skill ? '，可施放技能' : '，可攻击' : ''}" filter="url(#unit-shadow)">
+        const hpMax = maxHp(unit);
+        const apMax = maxAp(unit);
+        const recruit = def.faction !== factionOf(unit);
+        return `<g transform="translate(${x} ${y})" class="map-unit ${factionOf(unit)} ${unit.role ?? ''} ${recruit ? 'recruit' : ''} ${selected?.id === unit.id ? 'chosen' : ''} ${target ? (skill && factionOf(unit) === state.active ? 'heal-target' : 'attack-target') : ''} ${unit.ap < def.attackCost ? 'spent' : ''}" data-hex="${key(unit)}" data-unit-id="${unit.id}" role="button" tabindex="0" aria-label="${unitLabel(unit)}${target ? skill ? '，可施放技能' : '，可攻击' : ''}" filter="url(#unit-shadow)">
           <title>${unitLabel(unit)}</title>
           <ellipse cx="0" cy="19" rx="26" ry="13" fill="#0b120e" opacity=".55"/>
           <path class="token-border" d="m0-37 27 15v38L0 33-27 16v-38Z" fill="${factionOf(unit) === 'orc' ? '#786246' : '#62877a'}" stroke-width="1.5"/>
           <g transform="translate(-25 -34) scale(.4167)">${portrait(unit)}</g>
           <path class="target-corners" d="M-31-18v-10h10m42 0h10v10M-31 9v10h10m42 0h10V9" fill="none" stroke-width="2"/>
           <rect x="-23" y="25" width="46" height="5" rx="2" fill="#18221c" stroke="#131d17" stroke-width="1"/>
-          <rect x="-23" y="25" width="${46 * unit.hp / def.hp}" height="5" rx="2" fill="${unit.hp < def.hp * .35 ? '#d79b73' : factionOf(unit) === 'orc' ? '#c3a16a' : '#83b99e'}"/>
-          ${Array.from({ length: def.ap }, (_, i) => `<circle cx="${(i - (def.ap - 1) / 2) * 7}" cy="36" r="2" fill="${i < unit.ap ? '#e2c99a' : '#435044'}"/>`).join('')}
+          <rect x="-23" y="25" width="${46 * unit.hp / hpMax}" height="5" rx="2" fill="${unit.hp < hpMax * .35 ? '#d79b73' : factionOf(unit) === 'orc' ? '#c3a16a' : '#83b99e'}"/>
+          ${Array.from({ length: apMax }, (_, i) => `<circle cx="${(i - (apMax - 1) / 2) * 7}" cy="36" r="2" fill="${i < unit.ap ? '#e2c99a' : '#435044'}"/>`).join('')}
+          ${recruit ? '<g class="recruit-badge"><circle cx="22" cy="-30" r="7" fill="#3c3528" stroke="#e2c590"/><text x="22" y="-27" text-anchor="middle" font-size="8" fill="#e2c590">降</text></g>' : ''}
+          ${unit.role === 'boss' ? '<path d="m-12-44 4-8 4 5 4-7 4 7 4-5 4 8Z" fill="#e2d397" stroke="#7d6c3f"/>' : ''}
+          ${unit.statuses?.some(s => s.id === 'slowed') ? '<circle cx="-22" cy="-30" r="5" fill="#6f87a8" stroke="#c7d6ea"/>' : ''}
           ${selected?.id === unit.id ? '<path class="unit-pointer" d="m-5-46 5 6 5-6" fill="#e1c38a"/>' : ''}
         </g>`;
       }).join('')}
