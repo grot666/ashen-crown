@@ -138,7 +138,7 @@ describe('campaign progression and prisoner camp', () => {
     expect(after.roster.some(r => r.id === 'r-raider2')).toBe(false);
     expect(after.roster.some(r => r.name === CAMPAIGN[0].reward!.name)).toBe(true);
     expect(after.morale).toBe(MORALE.start + MORALE.victory + MORALE.fallen);
-    expect(after.result?.fallen).toEqual(['掠袭者·巴兹']);
+    expect(after.result?.fallen).toEqual(['兽人小子·巴兹']);
     expect(leaveResult(after).phase).toBe('camp');
     expect(validCampaign(after)).toBe(true);
   });
@@ -148,7 +148,7 @@ describe('campaign progression and prisoner camp', () => {
     c.battle!.units[1].hp = 0;
     const after = concludeBattle(c);
     expect(after.level).toBe(0);
-    expect(after.roster).toHaveLength(5);
+    expect(after.roster).toHaveLength(6);
     expect(after.morale).toBe(MORALE.start + MORALE.defeat);
     expect(leaveResult(after).phase).toBe('map');
     expect(startBattle(openBriefing(leaveResult(after))).attempts).toBe(2);

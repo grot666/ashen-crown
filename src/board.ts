@@ -1,6 +1,6 @@
 import { portrait, unitLabel } from './art';
 import { TERRAIN, UNITS } from './engine/content';
-import { canAttack, canSkill, factionOf, isCampaign, living, maxAp, maxHp, reachable, scenarioFor } from './engine/game';
+import { canAttack, canSkill, factionOf, goblinSnare, isCampaign, living, maxAp, maxHp, reachable, scenarioFor } from './engine/game';
 import { equal, key, pixel } from './engine/hex';
 import type { GameState, Terrain, Unit } from './engine/types';
 
@@ -81,6 +81,7 @@ export function renderBoard(state: GameState, options: BoardOptions): string {
           <rect x="-23" y="25" width="${46 * unit.hp / hpMax}" height="5" rx="2" fill="${unit.hp < hpMax * .35 ? '#d79b73' : factionOf(unit) === 'orc' ? '#c3a16a' : '#83b99e'}"/>
           ${Array.from({ length: apMax }, (_, i) => `<circle cx="${(i - (apMax - 1) / 2) * 7}" cy="36" r="2" fill="${i < unit.ap ? '#e2c99a' : '#435044'}"/>`).join('')}
           ${recruit ? '<g class="recruit-badge"><circle cx="22" cy="-30" r="7" fill="#3c3528" stroke="#e2c590"/><text x="22" y="-27" text-anchor="middle" font-size="8" fill="#e2c590">降</text></g>' : ''}
+          ${target && selected && goblinSnare(selected, unit) && isCampaign(state) ? '<g class="snare-badge"><circle cx="-22" cy="-30" r="7" fill="#4a2f16" stroke="#ffcf7a"/><text x="-22" y="-27" text-anchor="middle" font-size="8" fill="#ffcf7a">擒</text></g>' : ''}
           ${unit.role === 'boss' ? '<path d="m-12-44 4-8 4 5 4-7 4 7 4-5 4 8Z" fill="#e2d397" stroke="#7d6c3f"/>' : ''}
           ${unit.statuses?.some(s => s.id === 'slowed') ? '<circle cx="-22" cy="-30" r="5" fill="#6f87a8" stroke="#c7d6ea"/>' : ''}
           ${selected?.id === unit.id ? '<path class="unit-pointer" d="m-5-46 5 6 5-6" fill="#e1c38a"/>' : ''}

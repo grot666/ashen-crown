@@ -515,3 +515,9 @@ button.roster-card.on { border-color: #c9ad7670; background: linear-gradient(90d
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
 /* Long campaign rosters (reinforcements, recruits) scroll instead of stretching the board column. */
 .army-panel .roster { max-height: 262px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #4a5943 transparent; }
+
+/* v3: goblin snare + gender marks */
+.snare-chip { border-color: #e0a55a; background: #e0a55a22; color: #ffd38a; font-weight: 600; }
+.gender-mark { font-size: .62em; color: #9fd0c0; opacity: .85; vertical-align: .18em; margin-left: 4px; }
+.unit-trait { font-size: 10px; line-height: 1.8; color: #d8c79c; border-left: 2px solid #c9ae7680; padding: 4px 0 4px 9px; margin: -8px 0 16px; }
+.unit-trait strong { color: var(--gold-bright); margin-right: 6px; font-weight: 600; }

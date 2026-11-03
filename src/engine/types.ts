@@ -1,6 +1,7 @@
 export type Faction = 'orc' | 'elf';
 export type Terrain = 'plain' | 'forest' | 'ridge' | 'ruins' | 'water';
-export type UnitKind = 'warlord' | 'brute' | 'raider' | 'shaman' | 'warden' | 'ranger' | 'blade' | 'oracle' | 'regent' | 'totem';
+export type UnitKind = 'warlord' | 'brute' | 'raider' | 'shaman' | 'goblin' | 'warden' | 'ranger' | 'blade' | 'oracle' | 'regent' | 'totem';
+export type Gender = 'female' | 'male';
 export interface Hex { q: number; r: number }
 export interface Tile extends Hex { terrain: Terrain }
 export type SkillEffect = 'damage' | 'heal';
@@ -24,6 +25,10 @@ export interface UnitDefinition {
   ap: number;
   attackCost: number;
   skill: SkillDefinition;
+  /** Default gender for this unit type; level data may override per unit. */
+  gender?: Gender;
+  /** Special rule text shown in the unit dossier. */
+  trait?: string;
 }
 /** Temporary or permanent unit conditions, processed at the start of the owner's turn. */
 export type StatusId = 'slowed' | 'regen';
@@ -40,6 +45,8 @@ export interface Unit extends Hex {
   ap: number;
   cooldown: number;
   name?: string;
+  /** Per-unit override of the unit type's default gender. */
+  gender?: Gender;
   rosterId?: string;
   role?: UnitRole;
   captured?: boolean;

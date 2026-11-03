@@ -1,5 +1,5 @@
 import './style.css';
-import { crest, icons, portrait } from './art';
+import { crest, genderMark, icons, portrait } from './art';
 import { renderBoard } from './board';
 import { chooseAction } from './engine/ai';
 import {
@@ -8,8 +8,8 @@ import {
 } from './engine/campaign';
 import { FACTIONS, STATUS_NAMES, TERRAIN, UNITS } from './engine/content';
 import {
-  applyAction, armorOf, attackOf, canAttack, canSkill, captureChance, createGame, damage, factionOf, isAITurn, isCampaign, living, makeUnit,
-  maxAp, maxHp, nameOf, rangeOf, scenarioFor, skillAmount, skillRangeOf, tileAt, unitAt,
+  applyAction, armorOf, attackOf, canAttack, canSkill, captureChance, createGame, factionOf, goblinSnare, isAITurn, isCampaign, living, makeUnit,
+  maxAp, maxHp, nameOf, rangeOf, scenarioFor, skillAmount, skillRangeOf, strikeDamage, tileAt, unitAt,
 } from './engine/game';
 import { distance } from './engine/hex';
 import { CAMPAIGN } from './engine/scenarios';
@@ -77,9 +77,11 @@ function roster(faction: Faction): string {
 }
 
 function targetChip(unit: Unit, target: Unit): string {
-  const lethal = skillMode ? UNITS[unit.kind].skill.effect === 'damage' && skillAmount(unit, target) >= target.hp : damage(state, unit, target) >= target.hp;
+  const lethal = skillMode ? UNITS[unit.kind].skill.effect === 'damage' && skillAmount(unit, target) >= target.hp : strikeDamage(state, unit, target) >= target.hp;
   const chance = lethal ? captureChance(state, unit, target, skillMode) : 0;
-  return `<button data-target="${target.id}">${nameOf(target)}${lethal ? `<small class="${chance ? 'capture-chip' : 'kill-chip'}">${chance ? `致命 · 俘获 ${Math.round(chance * 100)}%` : '致命'}</small>` : ''}${icons.chevron}</button>`;
+  const snare = lethal && goblinSnare(unit, target) && chance >= 1;
+  const label = snare ? '必杀 · 俘获 100%' : chance ? `致命 · 俘获 ${Math.round(chance * 100)}%` : '致命';
+  return `<button data-target="${target.id}">${nameOf(target)}${lethal ? `<small class="${chance ? 'capture-chip' : 'kill-chip'}${snare ? ' snare-chip' : ''}">${label}</small>` : ''}${icons.chevron}</button>`;
 }
 
 function unitPanel(): string {
@@ -99,7 +101,7 @@ function unitPanel(): string {
     </div>
     <div class="unit-details">
       <div class="eyebrow">${faction === state.active ? '当前军团' : '敌方军团'} <span> / </span> ${def.role}</div>
-      <h2>${nameOf(unit)}</h2>
+      <h2>${nameOf(unit)}${genderMark(unit) ? ` <span class="gender-mark" title="${genderMark(unit) === '♀' ? '女性' : '男性'}">${genderMark(unit)}</span>` : ''}</h2>
       ${recruit ? '<p class="unit-note">归降者 · 现为灰牙氏族而战</p>' : ''}
       ${unit.statuses?.length ? `<div class="status-row">${unit.statuses.map(s => `<span title="${STATUS_NAMES[s.id].description}">${STATUS_NAMES[s.id].name}</span>`).join('')}</div>` : ''}
       <div class="health-label"><span>生命值</span><strong>${unit.hp}<small> / ${maxHp(unit)}</small></strong></div>
@@ -115,6 +117,7 @@ function unitPanel(): string {
         <span class="skill-icon">${icons.spark}</span><span><strong>${def.skill.name}</strong><small>${def.skill.cost} AP · 射程 ${skillRangeOf(unit)} · 冷却 ${def.skill.cooldown}</small></span>${icons.chevron}
       </button>
       <p class="skill-description">${def.skill.description}</p>
+      ${def.trait ? `<p class="unit-trait"><strong>特性</strong>${def.trait}</p>` : ''}
       ${skillMode ? `<div class="target-hint">选择${def.skill.effect === 'heal' ? '绿色友方' : '红色敌方'}目标施放 · 再次点击取消</div>` : ''}
       ${own && targets.length ? `<div class="target-list"><span>可${skillMode ? '施法' : '攻击'}目标</span>${targets.map(t => targetChip(unit, t)).join('')}</div>` : ''}
       <div class="terrain-note">${icons.tree}<span><strong>${TERRAIN[terrain.terrain].name}</strong><small>${TERRAIN[terrain.terrain].description}</small></span></div>
@@ -371,7 +374,7 @@ function dialogContent(): string {
       <section><span class="rule-number">01</span><h3>每一点行动，皆有代价</h3><p>点击己方单位，再点金色格移动。AP 是移动、攻击、技能共用的资源。普通单位每回合 3 AP，游击单位 4 AP；攻击与技能均消耗 2 AP。可多次行动，AP 耗尽后点击「结束回合」。</p></section>
       <section><span class="rule-number">02</span><h3>占据地利，而非只求先手</h3><p>荒原 / 王墟移动 1 AP，密林 / 高地移动 2 AP。密林防御 +2；王墟、高地防御 +1。高地上的远程单位普通攻击伤害 +2。深潭不可通行；单位阻挡移动，高地阻挡中间射线。</p></section>
       <section><span class="rule-number">03</span><h3>预判你的下一击</h3><p>红色角标为可攻击目标。普通伤害 = 攻击 + 高地加成 − 护甲 − 地形防御，最低 2。技能无视防御；治疗不能复活。技能冷却在己方回合开始时减 1，因此冷却 2 会跳过下一己方回合。</p></section>
-      <section><span class="rule-number">04</span><h3>主线：俘获与士气</h3><p>主线中击倒敌人有概率生擒（目标列表会显示「致命 · 俘获 %」）。战后在俘虏营审讯、招募或施以酷刑。士气高于 60 时攻击 +1，低于 40 时首回合 AP −1。遭遇战没有俘获，规则完全确定。</p></section>
+      <section><span class="rule-number">04</span><h3>主线：俘获与士气</h3><p>主线中击倒敌人有概率生擒（目标列表会显示「致命 · 俘获 %」）。战后在俘虏营审讯、招募或施以酷刑。士气高于 60 时攻击 +1，低于 40 时首回合 AP −1。<strong>哥布林擒拿：</strong>哥布林的攻击或技能命中女性精灵（♀）时一击制服并必定俘获（目标列表显示「必杀 · 俘获 100%」）；暮誓摄政等首领不受影响。遭遇战没有俘获，规则完全确定。</p></section>
     </div>
     <div class="key-guide"><span><kbd>E</kbd> 结束回合</span><span><kbd>Esc</kbd> 取消技能 / 选择</span><span><kbd>H</kbd> 战地手册</span><span><kbd>Tab</kbd> + <kbd>Enter</kbd> 键盘操作</span></div>
     <p class="fine-print">21+ 主题定位 · 原创暗黑奇幻世界，包含战争与死亡的非写实描述，无露骨画面；并非官方年龄分级。自动存档仅保存在当前浏览器，无账号、无追踪、无网络对战。</p>

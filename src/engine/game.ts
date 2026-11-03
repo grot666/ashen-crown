@@ -2,7 +2,7 @@ import { FACTIONS, TERRAIN, UNITS } from './content';
 import { disk, distance, equal, key, line, neighbors } from './hex';
 import { nextRandom } from './rng';
 import { CAMPAIGN_PLAYER, scenarioOf, type Scenario } from './scenarios';
-import type { Action, ActionResult, BattleLog, Faction, GameState, Hex, Tile, Unit, UnitKind } from './types';
+import type { Action, ActionResult, BattleLog, Faction, GameState, Gender, Hex, Tile, Unit, UnitKind } from './types';
 
 export const opponent = (f: Faction): Faction => f === 'orc' ? 'elf' : 'orc';
 export const factionOf = (unit: Unit): Faction => unit.owner;
@@ -13,6 +13,14 @@ export const attackOf = (unit: Unit): number => Math.max(0, UNITS[unit.kind].att
 export const armorOf = (unit: Unit): number => Math.max(0, UNITS[unit.kind].armor + (unit.bonus?.armor ?? 0));
 export const rangeOf = (unit: Unit): number => Math.max(1, UNITS[unit.kind].range + (unit.bonus?.range ?? 0));
 export const skillRangeOf = (unit: Unit): number => UNITS[unit.kind].skill.range + (UNITS[unit.kind].range > 1 ? unit.bonus?.range ?? 0 : 0);
+export const genderOf = (unit: Unit): Gender | undefined => unit.gender ?? UNITS[unit.kind].gender;
+/**
+ * Goblin rule: a goblin's attack or skill against a female elf (not the boss) subdues her outright.
+ * In campaign battles she is always captured (see captureChance); bosses are immune by design.
+ */
+export const goblinSnare = (unit: Unit, target: Unit): boolean =>
+  unit.kind === 'goblin' && UNITS[target.kind].faction === 'elf' && factionOf(unit) !== factionOf(target) &&
+  genderOf(target) === 'female' && target.role !== 'boss';
 export const hasStatus = (unit: Unit, id: string): boolean => !!unit.statuses?.some(s => s.id === id);
 export const living = (state: GameState, faction?: Faction): Unit[] =>
   state.units.filter(u => u.hp > 0 && (!faction || factionOf(u) === faction));
@@ -47,7 +55,7 @@ export function createScenarioBattle(scenario: Scenario, playerUnits: Unit[], en
   const enemy = opponent(CAMPAIGN_PLAYER);
   const units: Unit[] = playerUnits.map((u, i) => ({ ...u, ...scenario.playerSlots[i] }));
   if (scenario.escort) units.push(makeUnit('escort', 'totem', CAMPAIGN_PLAYER, scenario.escort, { role: 'escort' }));
-  scenario.enemies.forEach(([kind, q, r], i) => units.push(makeUnit(`e${i}`, kind, enemy, { q, r }, { bonus: enemyBonus ? { ...enemyBonus } : undefined, statuses: enemyStatuses?.map(s => ({ ...s })) })));
+  scenario.enemies.forEach(([kind, q, r, gender], i) => units.push(makeUnit(`e${i}`, kind, enemy, { q, r }, { ...(gender ? { gender } : {}), bonus: enemyBonus ? { ...enemyBonus } : undefined, statuses: enemyStatuses?.map(s => ({ ...s })) })));
   if (scenario.boss) {
     const [kind, q, r] = scenario.boss;
     units.push(makeUnit('boss', kind, enemy, { q, r }, { role: 'boss', bonus: enemyBonus ? { ...enemyBonus } : undefined, statuses: [{ id: 'regen', turns: 99 }, ...(enemyStatuses ?? []).map(s => ({ ...s }))] }));
@@ -105,8 +113,13 @@ export function damage(state: GameState, unit: Unit, target: Unit): number {
   const cover = TERRAIN[tileAt(state, target)?.terrain ?? 'plain'].defense;
   return Math.max(2, attackOf(unit) + elevation - armorOf(target) - cover);
 }
+/** Damage a strike would really deal, including the goblin instant subdue. */
+export function strikeDamage(state: GameState, unit: Unit, target: Unit): number {
+  return goblinSnare(unit, target) ? target.hp : damage(state, unit, target);
+}
 export function skillAmount(unit: Unit, target: Unit): number {
   const skill = UNITS[unit.kind].skill;
+  if (skill.effect === 'damage' && goblinSnare(unit, target)) return target.hp;
   return skill.effect === 'heal' ? Math.min(skill.power, maxHp(target) - target.hp) : Math.min(skill.power, target.hp);
 }
 
@@ -115,6 +128,7 @@ const CAPTURE_KIND: Partial<Record<UnitKind, number>> = { oracle: 0.15, shaman: 
 export function captureChance(state: GameState, attacker: Unit, target: Unit, viaSkill: boolean): number {
   const scenario = scenarioFor(state);
   if (!scenario.captureBase || factionOf(attacker) !== state.player || factionOf(target) === state.player || target.role) return 0;
+  if (goblinSnare(attacker, target)) return 1;
   const remaining = living(state, factionOf(target)).filter(u => u.id !== target.id).length;
   const chance = scenario.captureBase + (CAPTURE_KIND[target.kind] ?? 0) + state.captureMod +
     (remaining <= 2 ? 0.1 : 0) - (viaSkill ? 0.1 : 0);
@@ -167,9 +181,9 @@ function spawnReinforcements(state: GameState): void {
   for (const wave of scenario.reinforcements ?? []) {
     if (wave.round !== state.round) continue;
     const template = state.units.find(u => factionOf(u) === enemy && u.role !== 'boss');
-    wave.units.forEach(([kind, q, r], i) => {
+    wave.units.forEach(([kind, q, r, gender], i) => {
       const at = freeHexNear(state, { q, r });
-      if (at) state.units.push(makeUnit(`w${wave.round}-${i}`, kind, enemy, at, { bonus: template?.bonus ? { ...template.bonus } : undefined }));
+      if (at) state.units.push(makeUnit(`w${wave.round}-${i}`, kind, enemy, at, { ...(gender ? { gender } : {}), bonus: template?.bonus ? { ...template.bonus } : undefined }));
     });
     log(state, wave.text, 'objective');
   }
@@ -224,6 +238,12 @@ function endTurn(state: GameState): void {
 
 function resolveFall(state: GameState, unit: Unit, target: Unit, viaSkill: boolean): void {
   const chance = captureChance(state, unit, target, viaSkill);
+  if (chance >= 1) {
+    // Guaranteed capture skips the roll, so the RNG cursor is untouched.
+    target.captured = true;
+    log(state, `${nameOf(unit)}的绊索缠住了${nameOf(target)}，一击制服，押往后方营地（必定俘获）。`, 'capture');
+    return;
+  }
   if (chance > 0) {
     const [roll, next] = nextRandom(state.rng);
     state.rng = next;
@@ -258,10 +278,11 @@ export function applyAction(source: GameState, action: Action): ActionResult {
     if (!target) return { ok: false, error: '目标已离开战场。' };
     if (action.type === 'attack') {
       if (!canAttack(state, unit, target)) return { ok: false, error: '无法攻击：目标不在射程／视线内，或 AP 不足。' };
-      const amount = damage(state, unit, target);
+      const snare = goblinSnare(unit, target);
+      const amount = strikeDamage(state, unit, target);
       target.hp = Math.max(0, target.hp - amount);
       unit.ap -= def.attackCost;
-      log(state, `${nameOf(unit)}攻击${nameOf(target)}，造成 ${amount} 点伤害。`, 'attack');
+      log(state, snare ? `${nameOf(unit)}扑向${nameOf(target)}，一击将其制服。` : `${nameOf(unit)}攻击${nameOf(target)}，造成 ${amount} 点伤害。`, 'attack');
     } else {
       if (!canSkill(state, unit, target)) return { ok: false, error: '无法施放：请检查目标、射程、视线、AP 与技能冷却。' };
       const skill = def.skill;

@@ -25,6 +25,7 @@ function validUnit(u: unknown, tiles: Tile[], radius: number): u is Unit {
   if (u.statuses !== undefined && !(Array.isArray(u.statuses) && u.statuses.length <= 4 &&
     u.statuses.every(s => record(s) && (s.id === 'slowed' || s.id === 'regen') && integer(s.turns, 1, 99)))) return false;
   if (u.name !== undefined && !text(u.name, 30)) return false;
+  if (u.gender !== undefined && u.gender !== 'female' && u.gender !== 'male') return false;
   if (u.rosterId !== undefined && !text(u.rosterId, 40)) return false;
   if (u.role !== undefined && u.role !== 'escort' && u.role !== 'boss') return false;
   if (u.captured !== undefined && !(u.captured === true && u.hp === 0)) return false;

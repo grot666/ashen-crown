@@ -1,5 +1,5 @@
 import { UNITS } from './content';
-import { canAttack, canSkill, damage, factionOf, hasSight, isCampaign, living, maxHp, opponent, rangeOf, reachable, scenarioFor, skillAmount, skillRangeOf, tileAt } from './game';
+import { canAttack, canSkill, factionOf, strikeDamage, hasSight, isCampaign, living, maxHp, opponent, rangeOf, reachable, scenarioFor, skillAmount, skillRangeOf, tileAt } from './game';
 import { distance, equal } from './hex';
 import type { Action, GameState, Hex, Unit } from './types';
 
@@ -51,7 +51,7 @@ export function chooseAction(state: GameState): Action {
         });
       }
       if (canAttack(state, unit, target)) {
-        const amount = damage(state, unit, target);
+        const amount = strikeDamage(state, unit, target);
         candidates.push({ action: { type: 'attack', unitId: unit.id, targetId: target.id }, score: amount * 2 + (target.hp <= amount ? 35 : 0) + targetBonus(state, target) });
       }
     }

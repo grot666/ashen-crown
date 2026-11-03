@@ -42,7 +42,7 @@ export interface CampaignState {
   stats: CampaignStats;
 }
 
-export const ROSTER_CAP = 8;
+export const ROSTER_CAP = 10;
 export const MORALE = { start: 50, victory: 10, defeat: -10, fallen: -4, torture: 15, interrogateFallback: 5 };
 export const RESISTANCE = { hpPerPoint: 2, capturePerPoint: 0.08 };
 
@@ -60,9 +60,10 @@ const clampMorale = (m: number): number => Math.max(0, Math.min(100, m));
 export function newCampaign(seed: number): CampaignState {
   const roster: RosterUnit[] = [
     { id: 'r-warlord', kind: 'warlord', name: '督军·格罗什', origin: 'native' },
-    { id: 'r-brute', kind: 'brute', name: '铁颚·鲁克', origin: 'native' },
-    { id: 'r-raider1', kind: 'raider', name: '掠袭者·瑟卡', origin: 'native' },
-    { id: 'r-raider2', kind: 'raider', name: '掠袭者·巴兹', origin: 'native' },
+    { id: 'r-brute', kind: 'brute', name: '黑兽人·鲁克', origin: 'native' },
+    { id: 'r-raider1', kind: 'raider', name: '兽人小子·瑟卡', origin: 'native' },
+    { id: 'r-raider2', kind: 'raider', name: '兽人小子·巴兹', origin: 'native' },
+    { id: 'r-goblin', kind: 'goblin', name: '哥布林·斯尼克', origin: 'native' },
     { id: 'r-shaman', kind: 'shaman', name: '萨满·乌尔娜', origin: 'native' },
   ];
   return {

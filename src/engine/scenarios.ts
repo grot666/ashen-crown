@@ -1,4 +1,7 @@
-import type { Faction, Hex, Terrain, UnitKind } from './types';
+import type { Faction, Gender, Hex, Terrain, UnitKind } from './types';
+
+/** [kind, q, r, optional gender override] */
+export type Placement = [UnitKind, number, number, Gender?];
 
 export type ObjectiveType = 'eliminate' | 'timed' | 'escort' | 'defend' | 'boss';
 export interface Scenario {
@@ -25,10 +28,10 @@ export interface Scenario {
   fixed?: [UnitKind, number, number][];
   /** Campaign: player deployment hexes, in roster order. */
   playerSlots: Hex[];
-  enemies: [UnitKind, number, number][];
+  enemies: Placement[];
   boss?: [UnitKind, number, number];
   escort?: Hex;
-  reinforcements?: { round: number; text: string; units: [UnitKind, number, number][] }[];
+  reinforcements?: { round: number; text: string; units: Placement[] }[];
   captureBase: number;
   reward?: { kind: UnitKind; name: string };
   victoryText: string;
@@ -74,10 +77,10 @@ export const CAMPAIGN: Scenario[] = [
       '3,-1': 'ridge', '-3,0': 'ridge',
     },
     maxRounds: 10, onTimeout: 'enemy',
-    playerSlots: [{ q: -3, r: 1 }, { q: -3, r: 0 }, { q: -2, r: -1 }, { q: -4, r: 3 }, { q: -4, r: 2 }],
-    enemies: [['warden', 2, 0], ['ranger', 3, -1], ['blade', 2, 1], ['ranger', 2, -2]],
+    playerSlots: [{ q: -3, r: 1 }, { q: -3, r: 0 }, { q: -2, r: -1 }, { q: -4, r: 3 }, { q: -4, r: 2 }, { q: -4, r: 4 }],
+    enemies: [['warden', 2, 0], ['ranger', 3, -1], ['blade', 2, 1, 'female'], ['ranger', 2, -2, 'male']],
     captureBase: 0.4,
-    reward: { kind: 'brute', name: '铁颚·戈恩' },
+    reward: { kind: 'goblin', name: '哥布林·吉兹' },
     victoryText: '渡口失守，暮誓的旗帜沉入黑水。', defeatText: '河水暴涨，灰牙氏族被迫撤离渡口。',
   },
   {
@@ -97,10 +100,10 @@ export const CAMPAIGN: Scenario[] = [
     maxRounds: 14, onTimeout: 'enemy',
     escort: { q: -4, r: 2 },
     playerSlots: [{ q: -3, r: 1 }, { q: -3, r: 2 }, { q: -2, r: 0 }, { q: -4, r: 3 }, { q: -4, r: 1 }, { q: -2, r: 1 }],
-    enemies: [['warden', 2, -1], ['blade', 1, 0], ['ranger', 3, -2], ['ranger', 2, 0], ['oracle', 4, -3]],
-    reinforcements: [{ round: 3, text: '北侧林间传来刀鸣——刃舞者伏兵杀到！', units: [['blade', 0, -4], ['blade', 1, -4]] }],
+    enemies: [['warden', 2, -1, 'female'], ['blade', 1, 0], ['ranger', 3, -2], ['ranger', 2, 0, 'male'], ['oracle', 4, -3]],
+    reinforcements: [{ round: 3, text: '北侧林间传来刀鸣——刃舞者伏兵杀到！', units: [['blade', 0, -4, 'female'], ['blade', 1, -4]] }],
     captureBase: 0.35,
-    reward: { kind: 'shaman', name: '萨满·薇拉' },
+    reward: { kind: 'brute', name: '黑兽人·戈恩' },
     victoryText: '余火抵达营地，氏族的图腾重新燃起。', defeatText: '余火熄灭，车队溃散在林道之中。',
   },
   {
@@ -119,13 +122,13 @@ export const CAMPAIGN: Scenario[] = [
     },
     maxRounds: 8, onTimeout: 'player',
     playerSlots: [{ q: -1, r: 0 }, { q: 1, r: -1 }, { q: 0, r: 1 }, { q: 0, r: -1 }, { q: -1, r: 1 }, { q: 1, r: 0 }],
-    enemies: [['warden', 4, -3], ['ranger', 5, -3], ['blade', 4, -1], ['oracle', 5, -2]],
+    enemies: [['warden', 4, -3], ['ranger', 5, -3], ['blade', 4, -1, 'female'], ['oracle', 5, -2, 'male']],
     reinforcements: [
-      { round: 3, text: '北面的林线中，暮誓援军出现了。', units: [['blade', 0, -5], ['ranger', 1, -5]] },
-      { round: 5, text: '西南方的号角响起——第二支援军压向月井！', units: [['warden', -2, 5], ['blade', -3, 5], ['ranger', -4, 5]] },
+      { round: 3, text: '北面的林线中，暮誓援军出现了。', units: [['blade', 0, -5], ['ranger', 1, -5], ['warden', 2, -5, 'male']] },
+      { round: 5, text: '西南方的号角响起——第二支援军压向月井！', units: [['warden', -2, 5, 'female'], ['blade', -3, 5], ['ranger', -4, 5, 'male'], ['warden', -1, 4]] },
     ],
     captureBase: 0.3,
-    reward: { kind: 'raider', name: '掠袭者·克鲁格' },
+    reward: { kind: 'raider', name: '兽人小子·克鲁格' },
     victoryText: '八轮已过，灰牙主力抵达，月井归于灰牙。', defeatText: '暮誓的誓言重新照亮月井，阵地失守。',
   },
   {
@@ -143,7 +146,7 @@ export const CAMPAIGN: Scenario[] = [
     },
     maxRounds: 18, onTimeout: 'enemy',
     playerSlots: [{ q: -4, r: 1 }, { q: -4, r: 2 }, { q: -3, r: 0 }, { q: -3, r: 1 }, { q: -3, r: 2 }, { q: -5, r: 3 }],
-    enemies: [['warden', 3, -1], ['ranger', 3, -3], ['oracle', 5, -2], ['blade', 2, 0]],
+    enemies: [['warden', 3, -1], ['ranger', 3, -3], ['oracle', 5, -2], ['blade', 2, 0, 'female'], ['ranger', 4, -4, 'male']],
     boss: ['regent', 4, -2],
     captureBase: 0.3,
     victoryText: '摄政倒下，灰烬王冠落入灰牙之手。', defeatText: '长夜吞没了王座前的战场，灰牙的攻势被击退。',

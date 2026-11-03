@@ -35,7 +35,7 @@ test('starts the main campaign, deploys from the briefing and resumes the battle
   await expect(raider).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('button', { name: '出征' }).click();
   await expect(page.locator('.objective-strip')).toContainText('限时');
-  await expect(page.locator('.map-unit')).toHaveCount(9);
+  await expect(page.locator('.map-unit')).toHaveCount(10);
   await page.locator('.hex.reachable').first().click();
   await expect(page.getByRole('status')).toContainText('消耗');
   await page.reload();
@@ -53,7 +53,7 @@ test('captures an enemy, reviews the result and recruits the prisoner in the cam
   await page.locator('.target-list [data-target]').first().click();
   await expect(page.getByRole('heading', { name: '焦土渡口，告捷。' })).toBeVisible();
   await page.getByRole('button', { name: '查看战果' }).click();
-  await expect(page.locator('.result-card')).toContainText('铁颚·戈恩');
+  await expect(page.locator('.result-card')).toContainText('哥布林·吉兹');
   await expect(page.locator('.captive-row')).toContainText('黯月先知');
   await page.getByRole('button', { name: /前往俘虏营/ }).click();
   await expect(page.locator('.prisoner-card')).toHaveCount(1);
@@ -65,6 +65,29 @@ test('captures an enemy, reviews the result and recruits the prisoner in the cam
   await expect(page.locator('.camp-roster')).toContainText('归降·黯月先知');
   await page.getByRole('button', { name: '查看简报' }).click();
   await expect(page.locator('[data-deploy^="r-rec-"]')).toBeVisible();
+});
+
+test('a goblin previews and lands a guaranteed capture on a female elf, but not on a male elf', async ({ page }) => {
+  const c = startBattle(newCampaign(11));
+  const battle = c.battle!;
+  const goblin = battle.units.find(u => u.kind === 'goblin')!;
+  Object.assign(goblin, { q: -2, r: 0 });
+  const enemies = battle.units.filter(u => u.owner === 'elf');
+  enemies.slice(2).forEach(u => { u.hp = 0; });
+  Object.assign(enemies[0], { kind: 'blade', gender: 'female', hp: 20, q: -1, r: 0 });
+  Object.assign(enemies[1], { kind: 'ranger', gender: 'male', hp: 20, q: -2, r: 1 });
+  await page.addInitScript(([k, v]) => { if (!localStorage.getItem(k)) localStorage.setItem(k, v); }, [KEY, JSON.stringify(c)]);
+  await page.goto('./');
+  await page.locator(`[data-unit-id="${goblin.id}"]`).click({ force: true });
+  await expect(page.locator('.unit-trait')).toContainText('擒拿');
+  const female = page.locator(`.target-list [data-target="${enemies[0].id}"]`);
+  const male = page.locator(`.target-list [data-target="${enemies[1].id}"]`);
+  await expect(female).toContainText('必杀 · 俘获 100%');
+  await expect(male).not.toContainText('俘获');
+  await expect(page.locator('.snare-badge')).toHaveCount(1);
+  await female.click();
+  await expect(page.locator('.battle-log, [role="log"]').first()).toContainText('必定俘获');
+  expect(await page.evaluate(k => JSON.parse(localStorage.getItem(k)!).battle.units.find((u: { gender?: string; captured?: boolean }) => u.gender === 'female' && u.captured) !== undefined, KEY)).toBe(true);
 });
 
 test('interrogation unlocks a perk and torture raises morale with a resistance trade-off', async ({ page }) => {
