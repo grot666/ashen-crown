@@ -3,8 +3,9 @@ import { crest, genderMark, icons, portrait } from './art';
 import { renderBoard } from './board';
 import { chooseAction } from './engine/ai';
 import {
-  canRecruit, concludeBattle, deploySlots, interrogationPerk, leaveResult, MORALE, moraleTier, newCampaign, openBriefing,
-  PERKS, RESISTANCE, resolvePrisoner, retreatToMap, ROSTER_CAP, setDeploy, startBattle, type CampaignState, type PrisonerChoice,
+  canDismiss, canHire, canMount, canRecruit, concludeBattle, deploySlots, dismissRefund, dismissUnit, forgeKnight, hireUnit, HIRE_ORDER, HIRES,
+  interrogationPerk, leaveResult, MORALE, moraleTier, newCampaign, openBriefing, pending, PERKS, playerBonus, prisonerGender, RESISTANCE,
+  resolvePrisoner, retreatToMap, ROSTER_CAP, setDeploy, startBattle, stockade, STOCKADE_CAP, type CampaignState, type Prisoner, type PrisonerChoice,
 } from './engine/campaign';
 import { FACTIONS, STATUS_NAMES, TERRAIN, UNITS } from './engine/content';
 import {
@@ -12,7 +13,7 @@ import {
   maxAp, maxHp, nameOf, rangeOf, scenarioFor, skillAmount, skillRangeOf, strikeDamage, tileAt, unitAt,
 } from './engine/game';
 import { distance } from './engine/hex';
-import { CAMPAIGN } from './engine/scenarios';
+import { CAMPAIGN, type StoryLine } from './engine/scenarios';
 import type { Action, Faction, GameState, Hex, Unit, UnitKind } from './engine/types';
 import { clearCampaign, loadCampaign, loadGame, saveCampaign, saveGame } from './storage';
 
@@ -46,7 +47,7 @@ function initialNotice(): void {
   }
   if (loadedCampaign.status === 'error') return notify(loadedCampaign.message, true);
   if (loadedCampaign.status === 'loaded') return notify('已恢复主线进度。每次行动都会自动保存。');
-  notify('四场战役，一顶王冠。击倒的敌人有机会被生擒，带回营地发落。');
+  notify('两幕七场战役，一顶王冠。击倒的敌人有机会被生擒，带回营地发落。');
 }
 initialNotice();
 let dialog: Dialog | null = currentBattle()?.winner ? 'victory' : null;
@@ -54,13 +55,17 @@ let setupMode: GameState['mode'] = 'ai';
 let setupFaction: Faction = 'orc';
 let boardScroll = 0;
 let lastFocus: HTMLElement | null = null;
+let confirmDismiss: string | null = null;
 const escapeHTML = (s: string): string => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 const selected = (): Unit | undefined => state.units.find(u => u.id === selectedId && u.hp > 0);
 const interactive = (): boolean => !!currentBattle() && !state.winner && !isAITurn(state);
 const pip = (unit: Unit): string => `<span class="ap-pips">${Array.from({ length: maxAp(unit) }, (_, i) => `<i class="${i < unit.ap ? 'filled' : ''}"></i>`).join('')}</span>`;
 const pad = (n: number): string => String(n).padStart(2, '0');
 const LOG_KIND: Record<string, string> = { system: '军令', move: '行军', attack: '交锋', skill: '技能', death: '阵亡', capture: '俘获', objective: '目标' };
-const previewUnit = (kind: UnitKind, owner: Faction = UNITS[kind].faction): Unit => makeUnit(`preview-${kind}`, kind, owner, { q: 0, r: 0 });
+const previewUnit = (kind: UnitKind, owner: Faction = UNITS[kind].faction, gender?: Unit['gender']): Unit => makeUnit(`preview-${kind}`, kind, owner, { q: 0, r: 0 }, gender ? { gender } : {});
+const prisonerUnit = (p: Prisoner): Unit => previewUnit(p.kind, UNITS[p.kind].faction, prisonerGender(p));
+const sexMark = (p: Prisoner): string => UNITS[p.kind].faction === 'elf' ? prisonerGender(p) === 'female' ? ' <span class="gender-mark">♀</span>' : prisonerGender(p) === 'male' ? ' <span class="gender-mark">♂</span>' : '' : '';
+const storyScene = (lines: StoryLine[] | undefined, title: string): string => lines?.length ? `<details class="story-scene" open><summary>${title}</summary>${lines.map(l => `<p class="${l.speaker === '旁白' ? 'narration' : ''}">${l.speaker === '旁白' ? '' : `<strong>${l.speaker}</strong>`}${l.line}</p>`).join('')}</details>` : '';
 const bonusTag = (value: number): string => value ? `<em class="bonus ${value > 0 ? 'up' : 'down'}">${value > 0 ? '+' : ''}${value}</em>` : '';
 
 // ───────────────────────── battle screen ─────────────────────────
@@ -102,7 +107,7 @@ function unitPanel(): string {
     <div class="unit-details">
       <div class="eyebrow">${faction === state.active ? '当前军团' : '敌方军团'} <span> / </span> ${def.role}</div>
       <h2>${nameOf(unit)}${genderMark(unit) ? ` <span class="gender-mark" title="${genderMark(unit) === '♀' ? '女性' : '男性'}">${genderMark(unit)}</span>` : ''}</h2>
-      ${recruit ? '<p class="unit-note">归降者 · 现为灰牙氏族而战</p>' : ''}
+      ${recruit ? '<p class="unit-note">归降者 · 现为灰牙氏族而战</p>' : unit.kind === 'exile' ? '<p class="unit-note">雇佣契约 · 自由精灵，为军饷而战</p>' : ''}
       ${unit.statuses?.length ? `<div class="status-row">${unit.statuses.map(s => `<span title="${STATUS_NAMES[s.id].description}">${STATUS_NAMES[s.id].name}</span>`).join('')}</div>` : ''}
       <div class="health-label"><span>生命值</span><strong>${unit.hp}<small> / ${maxHp(unit)}</small></strong></div>
       <div class="health-track"><span style="width:${100 * unit.hp / maxHp(unit)}%"></span></div>
@@ -142,7 +147,7 @@ function objectiveStatus(): string {
     }
     case 'boss': {
       const boss = state.units.find(u => u.role === 'boss');
-      return boss ? `暮誓摄政 <strong>${boss.hp}</strong> / ${maxHp(boss)} 生命 · 剩余 ${roundsLeft} 轮` : '';
+      return boss ? `${nameOf(boss)} <strong>${boss.hp}</strong> / ${maxHp(boss)} 生命 · 剩余 ${roundsLeft} 轮` : '';
     }
     default: return '消灭所有敌军';
   }
@@ -212,7 +217,7 @@ function perkList(c: CampaignState): string {
 }
 function rosterCards(c: CampaignState, selectable: boolean): string {
   return `<div class="camp-roster">${c.roster.map(r => {
-    const unit = previewUnit(r.kind, 'orc');
+    const unit = previewUnit(r.kind, 'orc', r.kind === 'exile' ? 'female' : undefined);
     const on = c.deploy.includes(r.id);
     const inner = `<span class="roster-portrait">${portrait(unit)}</span><span class="roster-info"><strong>${r.name}</strong><span>${UNITS[r.kind].name}${r.origin === 'recruit' ? ' · 归降者' : ''}</span></span>`;
     return selectable
@@ -224,19 +229,21 @@ function campaignHeading(eyebrow: string, title: string, english: string, taglin
   return `<section class="campaign-heading"><div><div class="eyebrow"><span class="tiny-line"></span> 灰烬征途 <span class="muted"> / ${eyebrow}</span></div><h1>${title}<span>${english}</span></h1><p>${tagline}</p></div><div class="campaign-actions">${actions}</div></section>`;
 }
 function routeMap(c: CampaignState | null): string {
-  const nodes = [[120, 210], [300, 120], [480, 200], [660, 100]];
+  const nodes = [[60, 230], [160, 150], [260, 215], [360, 120], [470, 190], [570, 110], [670, 170]];
   const level = c?.level ?? -1;
   return `<svg class="route-map" viewBox="0 0 780 290" role="img" aria-label="征途地图">
-    <path d="M40 250 C120 230 90 215 120 210 S240 140 300 120 420 210 480 200 600 110 660 100 740 60 760 40" fill="none" stroke="#c9ad7655" stroke-width="2" stroke-dasharray="6 7"/>
+    <path d="M20 260 C40 240 50 235 60 230 S140 150 160 150 240 215 260 215 340 120 360 120 450 190 470 190 550 110 570 110 650 170 670 170 730 70 740 40" fill="none" stroke="#c9ad7655" stroke-width="2" stroke-dasharray="6 7"/>
+    <text x="210" y="275" text-anchor="middle" class="route-label">第一幕 · 夺冠</text><text x="570" y="275" text-anchor="middle" class="route-label">第二幕 · 冷冠</text>
+    <path d="M415 80v190" stroke="#c9ad7633" stroke-dasharray="3 6"/>
     ${nodes.map(([x, y], i) => {
       const done = i < level; const current = i === level;
       return `<g transform="translate(${x} ${y})" class="route-node ${done ? 'done' : current ? 'current' : 'locked'}">
         <circle r="${current ? 24 : 18}" fill="${done ? '#4a422a' : current ? '#6d5934' : '#1b241e'}" stroke="${done || current ? '#e2c590' : '#55604f'}" stroke-width="1.5"/>
-        <text y="6" text-anchor="middle" class="route-num">${['I', 'II', 'III', 'IV'][i]}</text>
+        <text y="6" text-anchor="middle" class="route-num">${['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'][i]}</text>
         <text y="${current ? 46 : 40}" text-anchor="middle" class="route-label">${CAMPAIGN[i].name}</text>
       </g>`;
     }).join('')}
-    <g transform="translate(740 40)" class="route-crown"><path d="m-14 6 4-14 6 7 4-10 4 10 6-7 4 14Z" fill="${level >= 4 ? '#e2c590' : '#55604f'}"/></g>
+    <g transform="translate(740 40)" class="route-crown"><path d="m-14 6 4-14 6 7 4-10 4 10 6-7 4 14Z" fill="${level >= CAMPAIGN.length ? '#e2c590' : '#55604f'}"/></g>
   </svg>`;
 }
 function levelCards(c: CampaignState | null): string {
@@ -244,22 +251,23 @@ function levelCards(c: CampaignState | null): string {
   return `<div class="level-list">${CAMPAIGN.map((s, i) => {
     const status = i < level ? 'done' : i === level ? 'current' : 'locked';
     return `<article class="level-card ${status}"><span class="level-num">${s.chapter}</span><div><h3>${s.name} <small>${s.english}</small></h3><p><span class="twist-tag">${s.objective.twist}</span>${s.objective.summary}</p></div>
-      ${status === 'current' ? `<button class="primary" data-action="briefing">${icons.sword}查看简报</button>` : `<span class="level-state">${status === 'done' ? '已攻克' : '未解锁'}</span>`}</article>`;
+      ${status === 'current' ? `<button class="primary" data-action="briefing">${icons.flag}进入营地</button>` : `<span class="level-state">${status === 'done' ? '已攻克' : '未解锁'}</span>`}</article>`;
   }).join('')}</div>`;
 }
 function intro(): string {
-  return `${campaignHeading('主线战役', '灰烬征途', 'The Ashen Road', '四场战役，一顶王冠。俘获、审讯、招募——每个选择都会跟着你走到王座前。')}
+  return `${campaignHeading('主线战役', '灰烬征途', 'The Ashen Road', '两幕七场战役，一顶王冠。俘获、审讯、招募、整军——每个选择都会跟着你走到最后。')}
     <section class="campaign-grid">
       <div class="campaign-panel">${routeMap(null)}${levelCards(null)}
         <button class="primary wide" data-action="campaign-new">${icons.crown}开始主线战役</button></div>
       <aside class="campaign-panel how-it-works"><span class="eyebrow">HOW THE ROAD WORKS</span><h2>倒下的敌人，未必死去。</h2>
         <p>主线中，击倒敌军有一定概率将其生擒（辅助单位更容易，统帅更难；用技能致命一击、或敌军已近崩溃时也会影响概率）。战后在俘虏营中为每名俘虏做出选择：</p>
         <div class="choice-explain"><div><strong>审讯</strong><small>解锁一项军团能力</small></div><div><strong>招募</strong><small>俘虏加入你的军团作战</small></div><div><strong>酷刑</strong><small>士气大涨，但敌军抵抗更顽强</small></div></div>
-        <p>军队士气会影响下一场战斗：高昂时攻击提升，低落时首回合行动迟滞。阵亡的战士不会归来——督军除外。</p></aside>
+        <p>军队士气会影响下一场战斗：高昂时攻击提升，低落时首回合行动迟滞。阵亡的战士不会归来——督军除外。</p>
+        <p>每场战斗前都会进入<strong>营地</strong>：挑选出战单位、查看属性、遣散队员、用军饷招募新兵（包括自愿签约的精灵雇佣兵），还能让哥布林与收押的女精灵俘虏组成<strong>哥布林骑士</strong>。</p></aside>
     </section>${noticeBar()}`;
 }
 function mapScreen(c: CampaignState): string {
-  return `${campaignHeading('征途地图', '灰烬征途', 'The Ashen Road', `第 ${Math.min(c.level + 1, 4)} / 4 场战役 · 胜 ${c.stats.victories} · 俘获 ${c.stats.captured}`, `<button class="outline-button" data-action="reset">${icons.flag}重新开始主线</button>`)}
+  return `${campaignHeading('征途地图', '灰烬征途', 'The Ashen Road', `第 ${Math.min(c.level + 1, CAMPAIGN.length)} / ${CAMPAIGN.length} 场战役 · 胜 ${c.stats.victories} · 俘获 ${c.stats.captured} · 军饷 ${c.gold}`, `<button class="outline-button" data-action="reset">${icons.flag}重新开始主线</button>`)}
     <section class="campaign-grid">
       <div class="campaign-panel">${routeMap(c)}${levelCards(c)}</div>
       <aside class="campaign-panel">${moraleMeter(c.morale)}
@@ -269,6 +277,60 @@ function mapScreen(c: CampaignState): string {
       </aside>
     </section>${noticeBar()}`;
 }
+function statLine(c: CampaignState, kind: UnitKind): string {
+  const unit = previewUnit(kind, 'orc');
+  const b = playerBonus(c, kind);
+  unit.bonus = b;
+  return `<span class="stat-chips"><i>生命 ${maxHp(unit)}</i><i>攻击 ${attackOf(unit)}</i><i>护甲 ${armorOf(unit)}</i><i>射程 ${rangeOf(unit)}</i><i>AP ${maxAp(unit)}</i></span>`;
+}
+function manageRoster(c: CampaignState): string {
+  return `<div class="manage-roster">${c.roster.map(r => {
+    const on = c.deploy.includes(r.id);
+    const def = UNITS[r.kind];
+    const dismissable = canDismiss(c, r.id);
+    const confirming = confirmDismiss === r.id;
+    const tag = r.origin === 'recruit' ? ' · 归降者' : r.kind === 'exile' ? ' · 雇佣契约' : '';
+    return `<article class="manage-card ${on ? 'on' : ''}" data-roster="${r.id}">
+      <span class="manage-portrait">${portrait(previewUnit(r.kind, 'orc', r.kind === 'exile' ? 'female' : undefined))}</span>
+      <div class="manage-info"><strong>${escapeHTML(r.name)}</strong><small>${def.name} · ${def.role}${tag}</small>${statLine(c, r.kind)}<small class="manage-skill">${def.skill.name}：${def.skill.description}</small></div>
+      <div class="manage-actions">
+        <button class="deploy-toggle ${on ? 'on' : ''}" data-deploy="${r.id}" aria-pressed="${on}">${on ? '出战' : '待命'}</button>
+        ${dismissable ? `<button class="dismiss-button ${confirming ? 'armed' : ''}" data-dismiss="${r.id}">${confirming ? `确认${r.kind === 'exile' ? '解约' : '遣散'}？+${dismissRefund(r)}` : r.kind === 'exile' ? '解约' : '遣散'}</button>` : '<small class="fine-print">统帅不可遣散</small>'}
+      </div>
+    </article>`;
+  }).join('')}</div>`;
+}
+function hirePanel(c: CampaignState): string {
+  return `<div class="hire-list">${HIRE_ORDER.map(kind => {
+    const hire = HIRES[kind]!;
+    const def = UNITS[kind];
+    const ok = canHire(c, kind);
+    const why = c.roster.length >= ROSTER_CAP ? '名册已满' : c.gold < hire.cost ? '军饷不足' : '';
+    return `<button class="hire-card" data-hire="${kind}" ${ok ? '' : 'disabled'}>
+      <span class="manage-portrait">${portrait(previewUnit(kind, 'orc', kind === 'exile' ? 'female' : undefined))}</span>
+      <span class="hire-info"><strong>${kind === 'exile' ? '精灵雇佣兵' : def.name}</strong><small>${def.role}</small>${statLine(c, kind)}${kind === 'exile' ? '<small>自愿签约的流亡精灵，不是俘虏；随时可以解约离开。</small>' : ''}</span>
+      <span class="hire-cost">${hire.cost}<small>军饷</small>${why ? `<em>${why}</em>` : ''}</span>
+    </button>`;
+  }).join('')}</div>`;
+}
+function stockadePanel(c: CampaignState): string {
+  const held = stockade(c);
+  const goblins = c.roster.filter(r => r.kind === 'goblin');
+  if (!held.length) return '<p class="empty-note">战俘营里没有收押的俘虏。战后在俘虏营选择「收押」，俘虏就会留在这里，可以日后发落，或与哥布林组成哥布林骑士。</p>';
+  return `<div class="prisoner-list compact">${held.map(p => {
+    const perk = interrogationPerk(c, p.kind);
+    const mount = canMount(p);
+    return `<article class="prisoner-card held"><div class="prisoner-portrait">${portrait(prisonerUnit(p))}</div>
+      <div class="prisoner-info"><h3>${UNITS[p.kind].name}${sexMark(p)}</h3><small>收押于战俘营 · ${UNITS[p.kind].role}</small></div>
+      <div class="choice-buttons">
+        <button data-prisoner="${p.id}" data-choice="interrogate"><strong>审讯</strong><small>${perk ? `获得「${PERKS[perk].name}」` : `士气 +${MORALE.interrogateFallback}`}</small></button>
+        <button data-prisoner="${p.id}" data-choice="recruit" ${canRecruit(c) ? '' : 'disabled'}><strong>招募</strong><small>${canRecruit(c) ? '编入军团' : '军团名册已满'}</small></button>
+        <button data-prisoner="${p.id}" data-choice="torture" class="dark"><strong>酷刑</strong><small>士气 +${MORALE.torture}；敌军抵抗 +1</small></button>
+      </div>
+      ${mount ? `<div class="forge-row"><span>合成哥布林骑士：</span>${goblins.length ? goblins.map(g => `<button class="forge-button" data-forge-goblin="${g.id}" data-forge-prisoner="${p.id}">${icons.spark}与${escapeHTML(g.name)}合成</button>`).join('') : '<small>名册中没有哥布林</small>'}</div>` : ''}
+    </article>`;
+  }).join('')}</div>`;
+}
 function briefingScreen(c: CampaignState): string {
   const scenario = CAMPAIGN[c.level];
   const slots = deploySlots(c.level);
@@ -276,18 +338,24 @@ function briefingScreen(c: CampaignState): string {
   const enemyCount = new Map<string, number>();
   [...scenario.enemies.map(e => e[0]), ...(scenario.boss ? [scenario.boss[0]] : [])].forEach(k => enemyCount.set(UNITS[k].name, (enemyCount.get(UNITS[k].name) ?? 0) + 1));
   const tier = moraleTier(c.morale);
-  return `${campaignHeading(scenario.chapter, scenario.name, scenario.english, scenario.tagline, `<button class="outline-button" data-action="campaign-map">${icons.chevron}返回地图</button>`)}
+  return `${campaignHeading(`${scenario.chapter} · 营地`, `营地 · ${scenario.name}`, 'The War Camp', `出征前整顿军团：挑选出战单位、遣散、招募、合成。军饷 ${c.gold}。`, `<button class="outline-button" data-action="campaign-map">${icons.chevron}返回地图</button>`)}
+    ${storyScene(scenario.story, `${scenario.act ? `${scenario.act} · ` : ''}${scenario.chapter}「${scenario.name}」· 战前`)}
     <section class="campaign-grid briefing">
-      <div class="campaign-panel">
+      <div class="campaign-panel camp-manage">
+        <div class="panel-sub"><span>队伍管理 · 选择出战单位</span><small>出战 ${c.deploy.length} / ${slots} · 名册 ${c.roster.length} / ${ROSTER_CAP}</small></div>
+        ${manageRoster(c)}
+        <div class="panel-sub"><span>招募队员</span><small class="gold-tag">军饷 <strong>${c.gold}</strong></small></div>
+        ${hirePanel(c)}
+        <p class="fine-print">俘虏可以在战俘营免费招募为归降者；这里用军饷招募灰牙新兵和自愿签约的精灵雇佣兵。遣散会退还一部分军饷。</p>
+        <div class="panel-sub"><span>战俘营 · 收押的俘虏</span><small>${stockade(c).length} / ${STOCKADE_CAP}</small></div>
+        ${stockadePanel(c)}
+      </div>
+      <aside class="campaign-panel">
         <span class="eyebrow">BRIEFING · 战前简报</span>
         <div class="briefing-text">${scenario.briefing.map(p => `<p>${p}</p>`).join('')}</div>
         <div class="objective-box"><span class="twist-tag">${scenario.objective.twist}</span><strong>${scenario.objective.summary}</strong></div>
         <div class="intel"><span>敌情</span>${[...enemyCount].map(([n, k]) => `<em>${n} ×${k}</em>`).join('')}${(scenario.reinforcements ?? []).map(w => `<em class="wave">第 ${w.round} 轮增援 ×${w.units.length}</em>`).join('')}</div>
         <div class="briefing-map">${renderBoard(preview, { selected: undefined, skill: false, coordinates: false, interactive: false })}</div>
-      </div>
-      <aside class="campaign-panel">
-        <div class="panel-sub"><span>选择出战单位</span><small>${c.deploy.length} / ${slots}</small></div>
-        ${rosterCards(c, true)}
         ${moraleMeter(c.morale)}
         <p class="fine-print">本战士气效果：${tier.effect}。${c.perks.length ? `军团能力：${c.perks.map(p => PERKS[p].name).join('、')}。` : ''}${c.resistance ? `敌军抵抗 ×${c.resistance}。` : ''}</p>
         <button class="primary wide" data-action="campaign-start" ${c.deploy.length ? '' : 'disabled'}>${icons.sword}出征</button>
@@ -297,7 +365,8 @@ function briefingScreen(c: CampaignState): string {
 function resultScreen(c: CampaignState): string {
   const r = c.result!;
   const scenario = CAMPAIGN[r.level];
-  const next = c.prisoners.length ? `前往俘虏营（${c.prisoners.length}）` : c.level >= CAMPAIGN.length ? '迎接王冠' : '返回征途地图';
+  const waiting = pending(c).length;
+  const next = waiting ? `前往俘虏营（${waiting}）` : c.level >= CAMPAIGN.length ? '迎接王冠' : '返回征途地图';
   return `${campaignHeading('战果', `${scenario.name} · ${r.victory ? '告捷' : '失利'}`, scenario.english, r.victory ? scenario.victoryText : scenario.defeatText)}
     <section class="result-card ${r.victory ? 'win' : 'loss'}">
       ${r.victory ? crest('orc') : icons.flag}
@@ -305,8 +374,10 @@ function resultScreen(c: CampaignState): string {
         <div><strong>${r.moraleDelta > 0 ? '+' : ''}${r.moraleDelta}</strong><span>士气变化</span></div>
         <div><strong>${r.captured.length}</strong><span>俘获</span></div>
         <div><strong>${r.fallen.length}</strong><span>永久阵亡</span></div>
+        <div><strong>+${r.gold ?? 0}</strong><span>军饷</span></div>
       </div>
       ${r.captured.length ? `<div class="captive-row">${r.captured.map(k => `<span>${portrait(previewUnit(k))}<small>${UNITS[k].name}</small></span>`).join('')}</div>` : ''}
+      ${r.victory ? storyScene(scenario.epilogue, `${scenario.chapter}「${scenario.name}」· 战后`) : ''}
       ${r.fallen.length ? `<p class="fallen-line">阵亡：${r.fallen.join('、')}</p>` : ''}
       ${r.reward ? `<p class="reward-line">${icons.spark}${r.reward}</p>` : ''}
       ${!r.victory ? '<p class="fallen-line">军团撤回营地重整。阵亡者已被救回，可以再次出征。</p>' : ''}
@@ -315,29 +386,35 @@ function resultScreen(c: CampaignState): string {
     </section>${noticeBar()}`;
 }
 function campScreen(c: CampaignState): string {
-  return `${campaignHeading('俘虏营地', '俘虏营地', 'The Prisoner Camp', '每名俘虏只能做出一个选择。结果会跟随你直到征途结束。')}
+  const waiting = pending(c);
+  const firstGoblin = c.roster.find(r => r.kind === 'goblin');
+  const stockFull = stockade(c).length >= STOCKADE_CAP;
+  return `${campaignHeading('俘虏营地', '俘虏营地', 'The Prisoner Camp', '每名俘虏只能做出一个选择。也可以先收押进战俘营，下次在营地再发落。')}
     <section class="campaign-grid camp">
-      <div class="prisoner-list">${c.prisoners.map(p => {
+      <div class="prisoner-list">${waiting.map(p => {
         const perk = interrogationPerk(c, p.kind);
         const recruitable = canRecruit(c);
-        const unit = previewUnit(p.kind);
-        return `<article class="prisoner-card"><div class="prisoner-portrait">${portrait(unit)}</div>
-          <div class="prisoner-info"><h3>${UNITS[p.kind].name}</h3><small>${UNITS[p.kind].role} · 生命 ${UNITS[p.kind].hp} · 攻击 ${UNITS[p.kind].attack} · 射程 ${UNITS[p.kind].range}</small></div>
-          <div class="choice-buttons">
+        return `<article class="prisoner-card"><div class="prisoner-portrait">${portrait(prisonerUnit(p))}</div>
+          <div class="prisoner-info"><h3>${UNITS[p.kind].name}${sexMark(p)}</h3><small>${UNITS[p.kind].role} · 生命 ${UNITS[p.kind].hp} · 攻击 ${UNITS[p.kind].attack} · 射程 ${UNITS[p.kind].range}</small></div>
+          <div class="choice-buttons four">
             <button data-prisoner="${p.id}" data-choice="interrogate"><strong>审讯</strong><small>${perk ? `获得「${PERKS[perk].name}」：${PERKS[perk].description}` : `情报已无新意：士气 +${MORALE.interrogateFallback}`}</small></button>
             <button data-prisoner="${p.id}" data-choice="recruit" ${recruitable ? '' : 'disabled'}><strong>招募</strong><small>${recruitable ? `编入军团（${c.roster.length} → ${c.roster.length + 1} / ${ROSTER_CAP}），为灰牙作战` : '军团名册已满'}</small></button>
             <button data-prisoner="${p.id}" data-choice="torture" class="dark"><strong>酷刑</strong><small>士气 +${MORALE.torture}；敌军抵抗 +1（敌军生命 +${RESISTANCE.hpPerPoint}，俘获率 −${RESISTANCE.capturePerPoint * 100}%）</small></button>
-          </div></article>`;
-      }).join('') || '<p class="empty-note">营地里已经没有俘虏了。</p>'}</div>
+            <button data-prisoner="${p.id}" data-choice="hold" ${stockFull ? 'disabled' : ''}><strong>收押</strong><small>${stockFull ? '战俘营已满' : `押入战俘营，留待营地发落${canMount(p) ? '（可与哥布林合成哥布林骑士）' : ''}`}</small></button>
+          </div>
+          ${canMount(p) && firstGoblin ? `<div class="forge-row"><span>合成哥布林骑士：</span><button class="forge-button" data-forge-goblin="${firstGoblin.id}" data-forge-prisoner="${p.id}">${icons.spark}与${escapeHTML(firstGoblin.name)}合成</button></div>` : ''}
+          </article>`;
+      }).join('') || '<p class="empty-note">营地里已经没有待发落的俘虏了。</p>'}</div>
       <aside class="campaign-panel">${moraleMeter(c.morale)}
         <div class="panel-sub"><span>军团能力</span><small>${c.perks.length} / 6</small></div>${perkList(c)}
-        <button class="primary wide" data-action="campaign-continue" ${c.prisoners.length ? 'disabled' : ''}>${icons.chevron}拔营，${c.level >= CAMPAIGN.length ? '迎接王冠' : '返回征途'}</button>
-        ${c.prisoners.length ? `<p class="fine-print">还有 ${c.prisoners.length} 名俘虏等待发落。</p>` : ''}
+        <div class="panel-sub"><span>战俘营</span><small>${stockade(c).length} / ${STOCKADE_CAP}</small></div>
+        <button class="primary wide" data-action="campaign-continue" ${waiting.length ? 'disabled' : ''}>${icons.chevron}拔营，${c.level >= CAMPAIGN.length ? '迎接王冠' : '返回征途'}</button>
+        ${waiting.length ? `<p class="fine-print">还有 ${waiting.length} 名俘虏等待发落。</p>` : ''}
       </aside>
     </section>${noticeBar()}`;
 }
 function completeScreen(c: CampaignState): string {
-  return `${campaignHeading('终章', '灰烬王冠，归于灰牙', 'The Crown Is Ours', '旧王已死，摄政已倒。新的秩序，始于灰烬。', `<button class="outline-button" data-action="reset">${icons.flag}再次踏上征途</button>`)}
+  return `${campaignHeading('终章', '灰烬王冠，重燃于灰牙', 'The Crown Burns Again', '摄政已倒，长夜已尽。新的秩序，始于灰烬。', `<button class="outline-button" data-action="reset">${icons.flag}再次踏上征途</button>`)}
     <section class="result-card win">${crest('orc')}
       <div class="result-stats"><div><strong>${c.stats.victories}</strong><span>胜利</span></div><div><strong>${c.stats.captured}</strong><span>俘获</span></div><div><strong>${c.stats.recruited}</strong><span>招募</span></div><div><strong>${c.stats.interrogated}</strong><span>审讯</span></div><div><strong>${c.stats.tortured}</strong><span>酷刑</span></div></div>
       ${moraleMeter(c.morale)}${perkList(c)}
@@ -374,6 +451,7 @@ function dialogContent(): string {
       <section><span class="rule-number">01</span><h3>每一点行动，皆有代价</h3><p>点击己方单位，再点金色格移动。AP 是移动、攻击、技能共用的资源。普通单位每回合 3 AP，游击单位 4 AP；攻击与技能均消耗 2 AP。可多次行动，AP 耗尽后点击「结束回合」。</p></section>
       <section><span class="rule-number">02</span><h3>占据地利，而非只求先手</h3><p>荒原 / 王墟移动 1 AP，密林 / 高地移动 2 AP。密林防御 +2；王墟、高地防御 +1。高地上的远程单位普通攻击伤害 +2。深潭不可通行；单位阻挡移动，高地阻挡中间射线。</p></section>
       <section><span class="rule-number">03</span><h3>预判你的下一击</h3><p>红色角标为可攻击目标。普通伤害 = 攻击 + 高地加成 − 护甲 − 地形防御，最低 2。技能无视防御；治疗不能复活。技能冷却在己方回合开始时减 1，因此冷却 2 会跳过下一己方回合。</p></section>
+      <section><span class="rule-number">05</span><h3>营地：整军再出征</h3><p>每关开战前进入营地：点「出战 / 待命」挑选出战单位，查看每个单位的属性与技能；「遣散」可让队员离队并退还部分军饷（督军不可遣散）；用胜利赚到的<strong>军饷</strong>招募哥布林、兽人小子、萨满、黑兽人，或雇佣自愿签约的<strong>精灵雇佣兵</strong>。战后在俘虏营可把俘虏「收押」进战俘营。<strong>哥布林骑士</strong>：一名哥布林 + 一名收押的女性精灵俘虏，合成后成为 6 AP 骑兵，穿越密林只需 1 AP，移动后下一次普通攻击 +3，保留擒拿。</p></section>
       <section><span class="rule-number">04</span><h3>主线：俘获与士气</h3><p>主线中击倒敌人有概率生擒（目标列表会显示「致命 · 俘获 %」）。战后在俘虏营审讯、招募或施以酷刑。士气高于 60 时攻击 +1，低于 40 时首回合 AP −1。<strong>哥布林擒拿：</strong>哥布林的攻击或技能命中女性精灵（♀）时一击制服并必定俘获（目标列表显示「必杀 · 俘获 100%」）；暮誓摄政等首领不受影响。遭遇战没有俘获，规则完全确定。</p></section>
     </div>
     <div class="key-guide"><span><kbd>E</kbd> 结束回合</span><span><kbd>Esc</kbd> 取消技能 / 选择</span><span><kbd>H</kbd> 战地手册</span><span><kbd>Tab</kbd> + <kbd>Enter</kbd> 键盘操作</span></div>
@@ -564,7 +642,7 @@ function switchView(next: View): void {
   selectedId = living(state, state.active)[0]?.id ?? null;
   skillMode = false;
   dialog = currentBattle()?.winner ? 'victory' : null;
-  notify(view === 'skirmish' ? '遭遇战：黑棘隘口。进度独立于主线保存。' : campaign ? '回到灰烬征途。' : '四场战役，一顶王冠。击倒的敌人有机会被生擒，带回营地发落。');
+  notify(view === 'skirmish' ? '遭遇战：黑棘隘口。进度独立于主线保存。' : campaign ? '回到灰烬征途。' : '两幕七场战役，一顶王冠。击倒的敌人有机会被生擒，带回营地发落。');
   render();
   window.scrollTo?.({ top: 0 });
   void runAI();
@@ -573,7 +651,7 @@ function switchView(next: View): void {
 function campaignAction(action: string): boolean {
   switch (action) {
     case 'campaign-new': setCampaign(newCampaign((Date.now() ^ (Math.random() * 2 ** 32)) >>> 0), '征途开始。先查看第一关的战前简报。'); return true;
-    case 'briefing': if (campaign) setCampaign(openBriefing(campaign), '选择出战单位，然后出征。'); return true;
+    case 'briefing': if (campaign) { confirmDismiss = null; setCampaign(openBriefing(campaign), '营地：整顿军团，选择出战单位，然后出征。'); } return true;
     case 'campaign-map': if (campaign) setCampaign(retreatToMap(campaign)); return true;
     case 'campaign-start': if (campaign?.deploy.length) setCampaign(startBattle(campaign), `${CAMPAIGN[campaign.level].chapter}「${CAMPAIGN[campaign.level].name}」开战：${CAMPAIGN[campaign.level].objective.summary}。`); return true;
     case 'conclude':
@@ -596,7 +674,7 @@ function campaignAction(action: string): boolean {
 
 app.addEventListener('click', event => {
   if (!(event.target instanceof Element)) return;
-  const element = event.target.closest<HTMLElement | SVGElement>('[data-action], [data-hex], [data-unit], [data-target], [data-mode], [data-faction], [data-deploy], [data-prisoner]');
+  const element = event.target.closest<HTMLElement | SVGElement>('[data-action], [data-hex], [data-unit], [data-target], [data-mode], [data-faction], [data-deploy], [data-prisoner], [data-dismiss], [data-hire], [data-forge-goblin]');
   if (!element) return;
   if (element.dataset.hex) {
     if (!currentBattle()) return;
@@ -616,6 +694,19 @@ app.addEventListener('click', event => {
       notify(`本关最多出战 ${slots} 名单位，请先让一名单位待命。`, true);
       render();
     } else setCampaign(setDeploy(campaign, campaign.deploy.includes(id) ? campaign.deploy.filter(d => d !== id) : [...campaign.deploy, id]));
+  } else if (element.dataset.dismiss && campaign) {
+    const id = element.dataset.dismiss;
+    if (confirmDismiss !== id) { confirmDismiss = id; render(); return; }
+    confirmDismiss = null;
+    if (canDismiss(campaign, id)) { const next = dismissUnit(campaign, id); setCampaign(next, next.chronicle.at(-1)); }
+  } else if (element.dataset.hire && campaign) {
+    const kind = element.dataset.hire as UnitKind;
+    if (canHire(campaign, kind)) { const next = hireUnit(campaign, kind); setCampaign(next, next.chronicle.at(-1)); }
+  } else if (element.dataset.forgeGoblin && element.dataset.forgePrisoner && campaign) {
+    try {
+      const next = forgeKnight(campaign, element.dataset.forgeGoblin, element.dataset.forgePrisoner);
+      setCampaign(next, next.chronicle.at(-1));
+    } catch { notify('无法合成：需要一名哥布林和一名女性精灵俘虏。', true); render(); }
   } else if (element.dataset.prisoner && campaign) {
     const choice = element.dataset.choice as PrisonerChoice;
     const next = resolvePrisoner(campaign, element.dataset.prisoner, choice);

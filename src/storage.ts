@@ -1,4 +1,4 @@
-import { PERK_ORDER, ROSTER_CAP, type CampaignState } from './engine/campaign';
+import { defaultGold, GOLD, PERK_ORDER, ROSTER_CAP, type CampaignState } from './engine/campaign';
 import { UNITS } from './engine/content';
 import { buildTiles, factionOf, living, maxAp, maxHp } from './engine/game';
 import { key } from './engine/hex';
@@ -23,7 +23,7 @@ function validUnit(u: unknown, tiles: Tile[], radius: number): u is Unit {
   if (!record(u) || !text(u.id, 24) || !kind(u.kind) || !faction(u.owner)) return false;
   if (u.bonus !== undefined && !(record(u.bonus) && Object.entries(u.bonus).every(([k, v]) => BONUS_KEYS.includes(k) && integer(v, -5, 40)))) return false;
   if (u.statuses !== undefined && !(Array.isArray(u.statuses) && u.statuses.length <= 4 &&
-    u.statuses.every(s => record(s) && (s.id === 'slowed' || s.id === 'regen') && integer(s.turns, 1, 99)))) return false;
+    u.statuses.every(s => record(s) && (s.id === 'slowed' || s.id === 'regen' || s.id === 'charge') && integer(s.turns, 1, 99)))) return false;
   if (u.name !== undefined && !text(u.name, 30)) return false;
   if (u.gender !== undefined && u.gender !== 'female' && u.gender !== 'male') return false;
   if (u.rosterId !== undefined && !text(u.rosterId, 40)) return false;
@@ -90,7 +90,9 @@ export function validCampaign(value: unknown): value is CampaignState {
   if (roster.length > ROSTER_CAP || !roster.every(r => record(r) && text(r.id, 40) && kind(r.kind) && text(r.name, 30) && (r.origin === 'native' || r.origin === 'recruit'))) return false;
   const ids = roster.map(r => (r as { id: string }).id);
   if (new Set(ids).size !== ids.length) return false;
-  if (prisoners.length > 40 || !prisoners.every(p => record(p) && text(p.id, 40) && kind(p.kind) && integer(p.level, 0, CAMPAIGN.length))) return false;
+  if (prisoners.length > 40 || !prisoners.every(p => record(p) && text(p.id, 40) && kind(p.kind) && integer(p.level, 0, CAMPAIGN.length) &&
+    (p.gender === undefined || p.gender === 'female' || p.gender === 'male') && (p.held === undefined || p.held === true))) return false;
+  if (!integer(value.gold, 0, GOLD.max)) return false;
   if (new Set(perks).size !== perks.length || !perks.every(p => PERK_ORDER.includes(p as never))) return false;
   if (!deploy.every(d => ids.includes(d as string))) return false;
   if (chronicle.length > 300 || !chronicle.every(c => text(c, 250))) return false;
@@ -101,15 +103,15 @@ export function validCampaign(value: unknown): value is CampaignState {
     if (!validSave(value.battle) || value.battle.scenarioId !== CAMPAIGN[value.level as number]?.id) return false;
   } else if (value.battle !== null) return false;
   if ((value.phase === 'result') !== (value.result !== null) && value.phase !== 'camp') return false;
-  if (value.phase === 'camp' && !prisoners.length) return false;
+  if (value.phase === 'camp' && value.result === null) return false;
   return true;
 }
 
-function read<T>(storageKey: string, check: (v: unknown) => v is T): LoadResult<T> {
+function read<T>(storageKey: string, check: (v: unknown) => v is T, upgrade: (v: unknown) => unknown = v => v): LoadResult<T> {
   try {
     const raw = localStorage.getItem(storageKey);
     if (!raw) return { status: 'empty' };
-    const parsed: unknown = JSON.parse(raw);
+    const parsed: unknown = upgrade(JSON.parse(raw));
     if (!check(parsed)) return { status: 'error', message: '本地存档不兼容或已损坏，已开启新战役。' };
     return { status: 'loaded', state: parsed };
   } catch (error) {
@@ -146,7 +148,19 @@ export function loadGame(): LoadResult {
   }
 }
 export const saveGame = (state: GameState): boolean => write(SKIRMISH_KEY, state);
-export const loadCampaign = (): LoadResult<CampaignState> => read(CAMPAIGN_KEY, validCampaign);
+/**
+ * Upgrades older v2 campaign saves in place: adds the 军饷 war chest and, for runs that had finished the
+ * original four levels, reopens the road so the new chapters can be played.
+ */
+export function upgradeCampaign(value: unknown): unknown {
+  if (!record(value) || value.version !== 2) return value;
+  const out: Record<string, unknown> = { ...value };
+  if (out.gold === undefined && Number.isInteger(out.level)) out.gold = defaultGold(out.level as number);
+  if (out.phase === 'complete' && Number.isInteger(out.level) && (out.level as number) < CAMPAIGN.length) out.phase = 'map';
+  return out;
+}
+const validUpgradedCampaign = (value: unknown): value is CampaignState => validCampaign(value);
+export const loadCampaign = (): LoadResult<CampaignState> => read(CAMPAIGN_KEY, validUpgradedCampaign, upgradeCampaign);
 export const saveCampaign = (campaign: CampaignState): boolean => write(CAMPAIGN_KEY, campaign);
 export function clearCampaign(): void {
   try { localStorage.removeItem(CAMPAIGN_KEY); } catch { /* storage unavailable */ }

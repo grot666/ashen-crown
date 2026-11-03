@@ -35,7 +35,7 @@ export function portrait(unit: Unit, large = false): string {
 }
 
 export const genderMark = (unit: Unit): string => {
-  const g = UNITS[unit.kind].faction === 'elf' ? genderOf(unit) : undefined;
+  const g = UNITS[unit.kind].faction === 'elf' || unit.kind === 'exile' ? genderOf(unit) : undefined;
   return g === 'female' ? '♀' : g === 'male' ? '♂' : '';
 };
 

@@ -188,10 +188,50 @@ function totem(): string {
     <path d="M60 3c-9 10-7 16 0 21 7-5 9-11 0-21Z" fill="#e3a65a"/><path d="M60 9c-3 5-2 8 0 10 2-2 3-5 0-10Z" fill="#f4d58e"/>`;
 }
 
+/** 哥布林骑士: the goblin rides on the shoulders of a captured elf (her ranger cloak, his hammer and reins). */
+function goblinKnight(): string {
+  const hair = HAIR.copper;
+  return `<g transform="translate(8 34) scale(.86)">
+      ${bust('#3f5442', '#9fb79a')}
+      <path d="M24 130q4-34 36-42 32 8 36 42" fill="#4d6650" stroke="${INK}" stroke-width="1.3"/>
+      ${elfHead(true, hair)}
+      ${fringe(true, hair)}
+    </g>
+    <path d="M34 54q-6 14-2 30l8 2q-2-14 4-28Zm52 0q6 14 2 30l-8 2q2-14-4-28Z" fill="#3c4a36" stroke="${INK}" stroke-width="1.4"/>
+    <path d="M30 84h12l1 6H29Zm48 0h12l1 6H77Z" fill="#5b4630" stroke="${INK}" stroke-width="1.1"/>
+    <path d="M46 52q14 30 28 0" fill="none" stroke="#8a6a3c" stroke-width="1.6"/>
+    <g transform="translate(29 -6) scale(.52)">
+      <path d="M28 130q2-30 32-36 30 6 32 36Z" fill="#3c4a36" stroke="${INK}" stroke-width="2"/>
+      <path d="M38 112q22 10 44 0" fill="none" stroke="#c9ae76" stroke-width="3"/>
+      <path d="m42 64-34-16 14 20 18 8Zm36 0 34-16-14 20-18 8Z" fill="${GOBLIN.shade}" stroke="${INK}" stroke-width="2"/>
+      <path d="M40 54q20-16 40 0l2 18q-4 16-22 20-18-4-22-20Z" fill="${GOBLIN.skin}" stroke="${INK}" stroke-width="2.4"/>
+      <path d="M30 60q2-34 30-38 28 4 30 38-8-18-30-20-22 2-30 20Z" fill="#6d6f73" stroke="${INK}" stroke-width="2.2"/>
+      <path d="M60 22v-14l8 6" fill="none" stroke="#b5463a" stroke-width="4"/>
+      <path d="M44 61q5-5 10 0-5 4-10 0Zm22 0q5-5 10 0-5 4-10 0Z" fill="${GOBLIN.eye}" stroke="${INK}" stroke-width="1.4"/>
+      <circle cx="49" cy="61" r="2" fill="${INK}"/><circle cx="71" cy="61" r="2" fill="${INK}"/>
+      <path d="M48 80q12 6 24 0" fill="none" stroke="${INK}" stroke-width="2.4"/><path d="m52 81 2 4 2-3 2 4 2-4 2 3 2-4" fill="${GOBLIN.tusk}" stroke="${INK}" stroke-width=".8"/>
+      <path d="M90 104 132 30" stroke="#5b4630" stroke-width="6"/><path d="m120 22 22 12-8 14-22-12Z" fill="#6d6f73" stroke="${INK}" stroke-width="2"/>
+    </g>`;
+}
+
+/** 精灵雇佣兵: an exiled elf archer under contract — torn royal sash, coin purse, short bow. */
+function exile(female: boolean): string {
+  const hair = female ? HAIR.ash : HAIR.raven;
+  return `<path d="M100 18q18 44 0 96" fill="none" stroke="#8a6a3c" stroke-width="3.2"/><path d="M100 18v96" stroke="#e5ddc4" stroke-width=".9"/>
+    ${bust('#4a4234', '#c9ae76')}
+    <path d="M24 130q4-34 36-42 32 8 36 42" fill="#5a4c38" stroke="${INK}" stroke-width="1.3"/>
+    <path d="M34 92 84 124" stroke="#7c4a5a" stroke-width="5"/><path d="m60 104-4 6 6 2" fill="none" stroke="#141a14" stroke-width="1.2"/>
+    <path d="M78 104q8-4 12 4-2 8-10 8-6-4-2-12Z" fill="#8a6a3c" stroke="${INK}" stroke-width="1.1"/><circle cx="84" cy="102" r="2" fill="#e2c590"/>
+    ${elfHead(female, hair, '#e2c590')}
+    ${fringe(female, hair)}
+    <path d="M36 44q24-10 48 0" fill="none" stroke="#8a6a3c" stroke-width="3"/>
+    ${female ? `<path d="M84 50q8 18 2 36" fill="none" stroke="${hair}" stroke-width="5" stroke-linecap="round"/>` : ''}`;
+}
+
 export function portraitSvg(kind: UnitKind, owner: Faction, gender: Gender | undefined, large: boolean): string {
   const female = gender === 'female';
   const body: Record<UnitKind, () => string> = {
-    warlord, brute: blackOrc, raider: orcBoy, shaman, goblin, totem,
+    warlord, brute: blackOrc, raider: orcBoy, shaman, goblin, goblinKnight, exile: () => exile(female), totem,
     warden: () => warden(female), ranger: () => ranger(female), blade: () => blade(female), oracle: () => oracle(female), regent,
   };
   return `<svg viewBox="0 0 120 130" width="120" height="130" class="${large ? 'portrait-large' : 'portrait'}" aria-hidden="true">${frame(BANNERS[owner])}${body[kind]()}</svg>`;

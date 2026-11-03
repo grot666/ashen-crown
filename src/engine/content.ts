@@ -1,4 +1,4 @@
-import type { Faction, Terrain, UnitDefinition, UnitKind } from './types';
+import type { Faction, StatusId, Terrain, UnitDefinition, UnitKind } from './types';
 
 export const FACTIONS: Record<Faction, { name: string; title: string; motto: string }> = {
   orc: { name: '灰牙氏族', title: 'THE ASHFANG', motto: '王冠归于敢于伸手的人。' },
@@ -31,6 +31,18 @@ export const UNITS: Record<UnitKind, UnitDefinition> = {
     skill: { name: '绊索飞锤', description: '向 2 格内的敌人甩出飞锤，造成 8 点基础伤害，无视防御。', effect: 'damage', range: 2, power: 8, cost: 2, cooldown: 2 },
     trait: '擒拿：攻击或技能命中女性精灵时一击制服并必定俘获（首领除外，不受敌军抵抗影响）。',
   },
+  goblinKnight: {
+    name: '哥布林骑士', role: '骑兵 / 突击捕手', faction: 'orc', hp: 34, attack: 11, armor: 2, range: 1, ap: 6, attackCost: 2,
+    skill: { name: '飞驰践踏', description: '驱策坐骑冲撞 2 格内的敌人，造成 13 点基础伤害，无视防御。', effect: 'damage', range: 2, power: 13, cost: 2, cooldown: 2 },
+    trait: '精灵坐骑：穿越密林只需 1 AP。冲锋：移动后的下一次普通攻击伤害 +3。骑手保留擒拿（命中女性精灵必定俘获，首领除外）。',
+  },
+  // Exiled elves who were never captured: they sign a paid contract with the Ashfang of their own free will.
+  // Listed under the orc faction because they fight for 灰牙 by contract (no recruit badge, no capture rules).
+  exile: {
+    name: '精灵雇佣兵', role: '雇佣军 / 远程游击', faction: 'orc', gender: 'female', hp: 24, attack: 9, armor: 1, range: 3, ap: 4, attackCost: 2,
+    skill: { name: '流亡者之箭', description: '射击 4 格内的敌人，造成 11 点基础伤害，无视防御。仍受高地阻挡视线。', effect: 'damage', range: 4, power: 11, cost: 2, cooldown: 2 },
+    trait: '雇佣契约：被王庭放逐的自由精灵，自愿领军饷为灰牙作战，并非俘虏；可随时解约离队。',
+  },
   shaman: {
     name: '余烬萨满', role: '支援 / 战地治疗', faction: 'orc', hp: 23, attack: 7, armor: 1, range: 2, ap: 3, attackCost: 2,
     skill: { name: '余烬复苏', description: '为 2 格内的友军或自身恢复 12 点生命，不超过上限。', effect: 'heal', range: 2, power: 12, cost: 2, cooldown: 2 },
@@ -61,7 +73,8 @@ export const UNITS: Record<UnitKind, UnitDefinition> = {
   },
 };
 
-export const STATUS_NAMES: Record<'slowed' | 'regen', { name: string; description: string }> = {
+export const STATUS_NAMES: Record<StatusId, { name: string; description: string }> = {
   slowed: { name: '迟滞', description: '下个己方回合 AP −1' },
   regen: { name: '长夜复苏', description: '己方回合开始时恢复 4 生命' },
+  charge: { name: '冲锋', description: '下一次普通攻击伤害 +3' },
 };

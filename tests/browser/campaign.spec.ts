@@ -22,10 +22,10 @@ test('starts the main campaign, deploys from the briefing and resumes the battle
   await page.goto('./');
   await expect(page.getByRole('heading', { name: /灰烬征途/ })).toBeVisible();
   await page.getByRole('button', { name: '开始主线战役' }).click();
-  await expect(page.locator('.level-card')).toHaveCount(4);
-  await expect(page.locator('.level-card.locked')).toHaveCount(3);
+  await expect(page.locator('.level-card')).toHaveCount(7);
+  await expect(page.locator('.level-card.locked')).toHaveCount(6);
   await expect(page.getByRole('meter', { name: '军队士气' }).first()).toHaveAttribute('aria-valuenow', '50');
-  await page.getByRole('button', { name: '查看简报' }).click();
+  await page.getByRole('button', { name: '进入营地' }).click();
   await expect(page.getByRole('heading', { name: /焦土渡口/ })).toBeVisible();
   await expect(page.locator('.objective-box')).toContainText('10 轮内全歼守军');
   const raider = page.locator('[data-deploy="r-raider2"]');
@@ -63,7 +63,7 @@ test('captures an enemy, reviews the result and recruits the prisoner in the cam
   await page.getByRole('button', { name: /拔营/ }).click();
   await expect(page.locator('.level-card.current')).toContainText('余烬车队');
   await expect(page.locator('.camp-roster')).toContainText('归降·黯月先知');
-  await page.getByRole('button', { name: '查看简报' }).click();
+  await page.getByRole('button', { name: '进入营地' }).click();
   await expect(page.locator('[data-deploy^="r-rec-"]')).toBeVisible();
 });
 
@@ -117,4 +117,65 @@ test('switches between campaign and skirmish without mixing saves', async ({ pag
   await expect(page.locator('.map-unit')).toHaveCount(10);
   await page.getByRole('link', { name: '主线战役' }).click();
   await expect(page.locator('.level-card.current')).toContainText('焦土渡口');
+});
+
+test('war camp: hire, dismiss, forge a 哥布林骑士 from a held female elf, and fight with the chosen roster', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', e => errors.push(e.message));
+  const c = newCampaign(5);
+  const camp = { ...c, level: 4, gold: 300, phase: 'map' as const, prisoners: [{ id: 'pr-x', kind: 'ranger' as const, level: 3, gender: 'female' as const, held: true as const }] };
+  await page.addInitScript(([k, v]) => { if (!localStorage.getItem(k)) localStorage.setItem(k, v); }, [KEY, JSON.stringify(camp)]);
+  await page.goto('./');
+  await expect(page.locator('.level-card')).toHaveCount(7);
+  await page.getByRole('button', { name: '进入营地' }).click();
+  await expect(page.getByRole('heading', { name: /营地 · 银叶伏击/ })).toBeVisible();
+  await expect(page.locator('.story-scene')).toContainText('星誓祭司');
+  await expect(page.locator('.manage-card')).toHaveCount(6);
+  // hire an elf mercenary (free contract) and a raider
+  await page.locator('[data-hire="exile"]').click();
+  await expect(page.getByRole('status')).toContainText('契约');
+  await page.locator('[data-hire="raider"]').click();
+  await expect(page.locator('.manage-card')).toHaveCount(8);
+  await expect(page.locator('.gold-tag')).toContainText('160');
+  // dismiss needs a confirming second click
+  const dismiss = page.locator('[data-dismiss="r-raider2"]');
+  await dismiss.click();
+  await expect(dismiss).toContainText('确认');
+  await dismiss.click();
+  await expect(page.locator('.manage-card')).toHaveCount(7);
+  await expect(page.getByRole('status')).toContainText('遣散');
+  await expect(page.locator('[data-dismiss="r-warlord"]')).toHaveCount(0);
+  // forge
+  await page.locator('[data-forge-goblin="r-goblin"]').click();
+  await expect(page.getByRole('status')).toContainText('哥布林骑士·斯尼克');
+  await expect(page.locator('.manage-card').filter({ hasText: '哥布林骑士·斯尼克' })).toBeVisible();
+  await expect(page.locator('.prisoner-card.held')).toHaveCount(0);
+  await page.screenshot({ path: `test-results/camp-${test.info().project.name}.png`, fullPage: true });
+  // choose roster: bench the shaman, deploy the mercenary
+  const shaman = page.locator('[data-deploy="r-shaman"]');
+  if (await shaman.getAttribute('aria-pressed') === 'true') await shaman.click();
+  const merc = page.locator('.manage-card').filter({ hasText: '雇佣兵' }).locator('[data-deploy]');
+  if (await merc.getAttribute('aria-pressed') !== 'true') await merc.click();
+  await page.getByRole('button', { name: '出征' }).click();
+  await expect(page.locator('.objective-strip')).toContainText('包围');
+  const saved = await page.evaluate(k => JSON.parse(localStorage.getItem(k)!), KEY);
+  const kinds = saved.battle.units.filter((u: { rosterId?: string }) => u.rosterId).map((u: { kind: string }) => u.kind);
+  expect(kinds).toContain('goblinKnight');
+  expect(kinds).toContain('exile');
+  expect(kinds).not.toContain('shaman');
+  await page.locator('[data-unit-id^="p-r-knight"]').click({ force: true });
+  await expect(page.locator('.unit-trait')).toContainText('精灵坐骑');
+  await page.screenshot({ path: `test-results/knight-${test.info().project.name}.png` });
+  await page.reload();
+  await expect(page.locator('[data-unit-id^="p-r-knight"]')).toHaveCount(1);
+  expect(errors).toEqual([]);
+});
+
+test('an old save that had finished the original four levels reopens the road to act two', async ({ page }) => {
+  const c = { ...newCampaign(3), level: 4, phase: 'complete' } as Record<string, unknown>;
+  delete c.gold;
+  await page.addInitScript(([k, v]) => { if (!localStorage.getItem(k)) localStorage.setItem(k, v); }, [KEY, JSON.stringify(c)]);
+  await page.goto('./');
+  await expect(page.locator('.level-card.current')).toContainText('银叶伏击');
+  await expect(page.locator('.campaign-heading')).toContainText('军饷 220');
 });

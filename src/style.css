@@ -521,3 +521,49 @@ button.roster-card.on { border-color: #c9ad7670; background: linear-gradient(90d
 .gender-mark { font-size: .62em; color: #9fd0c0; opacity: .85; vertical-align: .18em; margin-left: 4px; }
 .unit-trait { font-size: 10px; line-height: 1.8; color: #d8c79c; border-left: 2px solid #c9ae7680; padding: 4px 0 4px 9px; margin: -8px 0 16px; }
 .unit-trait strong { color: var(--gold-bright); margin-right: 6px; font-weight: 600; }
+
+/* v4: war camp (roster management, hiring, stockade, goblin knight) + story scenes */
+.story-scene { margin: 0 0 18px; padding: 14px 18px; border: 1px solid #c9ad7633; background: linear-gradient(90deg, #c9ad760d, transparent), #141c16; }
+.story-scene summary { cursor: pointer; font: 500 13px var(--serif); color: var(--gold-bright); letter-spacing: 1px; margin-bottom: 8px; }
+.story-scene p { margin: 6px 0; font: 13px/1.9 var(--serif); color: #c8c8b2; }
+.story-scene p strong { color: #e2c590; margin-right: 8px; font-weight: 500; }
+.story-scene p strong::after { content: '：'; }
+.story-scene p.narration { color: #9ea78f; font-style: italic; }
+.result-card .story-scene { text-align: left; width: 100%; box-sizing: border-box; }
+.manage-roster { display: grid; gap: 8px; }
+.manage-card { display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 8px 10px; border: 1px solid #ffffff10; background: #ffffff03; }
+.manage-card.on { border-color: #c9ad7670; background: linear-gradient(90deg, #bba06a18, transparent); }
+.manage-portrait { width: 52px; height: 56px; display: inline-block; border: 1px solid #c9ad7630; overflow: hidden; flex-shrink: 0; }
+.manage-portrait svg { width: 100%; height: 100%; }
+.manage-info { min-width: 0; display: grid; gap: 3px; }
+.manage-info strong { font: 500 14px var(--serif); color: #e2dcc4; }
+.manage-info small, .hire-info small { font-size: 10px; color: #8e9a82; line-height: 1.6; }
+.manage-skill { color: #a3ab94 !important; }
+.stat-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.stat-chips i { font-style: normal; font-size: 10px; padding: 1px 6px; border: 1px solid #ffffff14; color: #d6d2bb; background: #0000002a; }
+.manage-actions { display: grid; gap: 6px; justify-items: stretch; min-width: 88px; }
+.deploy-toggle, .dismiss-button, .forge-button { padding: 7px 10px; font-size: 11px; border: 1px solid #ffffff22; background: #ffffff06; color: #c9c7b0; }
+.deploy-toggle.on { border-color: var(--gold); color: var(--gold-bright); background: #c9ad7618; }
+.dismiss-button { border-color: #8a5a3a66; color: #e0a98c; }
+.dismiss-button.armed { background: #8a3a2a55; color: #ffd9c4; }
+.hire-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.hire-card { display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px; text-align: left; border: 1px solid #c9ad7633; background: #c9ad7608; }
+.hire-card:not(:disabled):hover { border-color: var(--gold); }
+.hire-card:disabled { opacity: .5; }
+.hire-info { display: grid; gap: 3px; min-width: 0; }
+.hire-info strong { font: 500 13px var(--serif); color: #e2dcc4; }
+.hire-cost { display: grid; justify-items: center; font: 600 18px var(--display); color: var(--gold-bright); }
+.hire-cost small { font-size: 9px; color: #8e9a82; }
+.hire-cost em { font-style: normal; font-size: 9px; color: #e0a98c; }
+.gold-tag strong { color: var(--gold-bright); font-size: 13px; }
+.prisoner-list.compact .prisoner-card { padding: 10px; }
+.choice-buttons.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.forge-row { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; font-size: 11px; color: #c9c7b0; }
+.forge-button { display: inline-flex; gap: 6px; align-items: center; border-color: #ffcf7a66; color: #ffcf7a; background: #4a2f1630; }
+.forge-button .icon { width: 14px; height: 14px; }
+@media (max-width: 760px) {
+  .manage-card { grid-template-columns: 44px minmax(0, 1fr); }
+  .manage-actions { grid-column: 1 / -1; grid-template-columns: 1fr 1fr; }
+  .hire-list { grid-template-columns: minmax(0, 1fr); }
+  .choice-buttons.four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

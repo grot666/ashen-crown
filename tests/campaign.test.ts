@@ -35,9 +35,14 @@ function seedFor(chance: number, success: boolean): number {
 }
 
 describe('scenario data', () => {
-  it('defines four campaign levels with distinct twists, valid deployments and Chinese briefings', () => {
-    expect(CAMPAIGN).toHaveLength(4);
-    expect(CAMPAIGN.map(s => s.objective.type)).toEqual(['timed', 'escort', 'defend', 'boss']);
+  it('defines seven campaign levels (two acts) with valid deployments, Chinese briefings and story scenes', () => {
+    expect(CAMPAIGN).toHaveLength(7);
+    expect(CAMPAIGN.map(s => s.objective.type)).toEqual(['timed', 'escort', 'defend', 'boss', 'eliminate', 'escort', 'boss']);
+    expect(new Set(CAMPAIGN.map(s => s.id)).size).toBe(7);
+    for (const s of CAMPAIGN) {
+      expect(s.story?.length).toBeGreaterThanOrEqual(3);
+      expect(s.epilogue?.length).toBeGreaterThanOrEqual(3);
+    }
     for (const s of CAMPAIGN) {
       const cells = new Set(disk(s.radius).map(key));
       const spots = [...s.playerSlots, ...s.enemies.map(([, q, r]) => ({ q, r })), ...(s.boss ? [{ q: s.boss[1], r: s.boss[2] }] : []), ...(s.escort ? [s.escort] : [])];
@@ -54,7 +59,7 @@ describe('scenario data', () => {
   });
   it('builds each battle with owner-tagged player, enemy, escort and boss units', () => {
     let c = newCampaign(1);
-    for (let level = 0; level < 4; level++) {
+    for (let level = 0; level < CAMPAIGN.length; level++) {
       c = { ...c, level };
       const battle = startBattle(openBriefing(c)).battle!;
       expect(validSave(battle)).toBe(true);

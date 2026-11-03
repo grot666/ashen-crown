@@ -1,6 +1,6 @@
 export type Faction = 'orc' | 'elf';
 export type Terrain = 'plain' | 'forest' | 'ridge' | 'ruins' | 'water';
-export type UnitKind = 'warlord' | 'brute' | 'raider' | 'shaman' | 'goblin' | 'warden' | 'ranger' | 'blade' | 'oracle' | 'regent' | 'totem';
+export type UnitKind = 'warlord' | 'brute' | 'raider' | 'shaman' | 'goblin' | 'goblinKnight' | 'exile' | 'warden' | 'ranger' | 'blade' | 'oracle' | 'regent' | 'totem';
 export type Gender = 'female' | 'male';
 export interface Hex { q: number; r: number }
 export interface Tile extends Hex { terrain: Terrain }
@@ -31,7 +31,7 @@ export interface UnitDefinition {
   trait?: string;
 }
 /** Temporary or permanent unit conditions, processed at the start of the owner's turn. */
-export type StatusId = 'slowed' | 'regen';
+export type StatusId = 'slowed' | 'regen' | 'charge';
 export interface Status { id: StatusId; turns: number }
 /** Flat modifiers applied on top of the unit definition (perks, morale, resistance). */
 export interface StatBonus { hp?: number; attack?: number; armor?: number; range?: number; ap?: number }

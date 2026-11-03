@@ -19,7 +19,7 @@ export const genderOf = (unit: Unit): Gender | undefined => unit.gender ?? UNITS
  * In campaign battles she is always captured (see captureChance); bosses are immune by design.
  */
 export const goblinSnare = (unit: Unit, target: Unit): boolean =>
-  unit.kind === 'goblin' && UNITS[target.kind].faction === 'elf' && factionOf(unit) !== factionOf(target) &&
+  (unit.kind === 'goblin' || unit.kind === 'goblinKnight') && UNITS[target.kind].faction === 'elf' && factionOf(unit) !== factionOf(target) &&
   genderOf(target) === 'female' && target.role !== 'boss';
 export const hasStatus = (unit: Unit, id: string): boolean => !!unit.statuses?.some(s => s.id === id);
 export const living = (state: GameState, faction?: Faction): Unit[] =>
@@ -58,7 +58,7 @@ export function createScenarioBattle(scenario: Scenario, playerUnits: Unit[], en
   scenario.enemies.forEach(([kind, q, r, gender], i) => units.push(makeUnit(`e${i}`, kind, enemy, { q, r }, { ...(gender ? { gender } : {}), bonus: enemyBonus ? { ...enemyBonus } : undefined, statuses: enemyStatuses?.map(s => ({ ...s })) })));
   if (scenario.boss) {
     const [kind, q, r] = scenario.boss;
-    units.push(makeUnit('boss', kind, enemy, { q, r }, { role: 'boss', bonus: enemyBonus ? { ...enemyBonus } : undefined, statuses: [{ id: 'regen', turns: 99 }, ...(enemyStatuses ?? []).map(s => ({ ...s }))] }));
+    units.push(makeUnit('boss', kind, enemy, { q, r }, { role: 'boss', ...(scenario.bossName ? { name: scenario.bossName } : {}), bonus: enemyBonus ? { ...enemyBonus } : undefined, statuses: [{ id: 'regen', turns: 99 }, ...(enemyStatuses ?? []).map(s => ({ ...s }))] }));
   }
   const state: GameState = {
     version: 2, scenarioId: scenario.id, mode: 'ai', player: CAMPAIGN_PLAYER, active: CAMPAIGN_PLAYER, round: 1, turn: 1, winner: null,
@@ -69,6 +69,11 @@ export function createScenarioBattle(scenario: Scenario, playerUnits: Unit[], en
   return state;
 }
 
+/** 哥布林骑士's elf mount crosses forest as easily as open ground. */
+export const CHARGE_BONUS = 3;
+export function terrainCost(unit: Unit, terrain: Tile['terrain']): number {
+  return unit.kind === 'goblinKnight' && terrain === 'forest' ? 1 : TERRAIN[terrain].cost;
+}
 // Weighted flood-fill keeps movement, highlights, and AI on the same rules.
 export function reachable(state: GameState, unit: Unit): Map<string, number> {
   const costs = new Map<string, number>([[key(unit), 0]]);
@@ -80,7 +85,7 @@ export function reachable(state: GameState, unit: Unit): Map<string, number> {
     for (const next of neighbors(current)) {
       const tile = tileAt(state, next);
       if (!tile || unitAt(state, next)) continue;
-      const cost = currentCost + TERRAIN[tile.terrain].cost;
+      const cost = currentCost + terrainCost(unit, tile.terrain);
       if (cost <= unit.ap && cost < (costs.get(key(next)) ?? Infinity)) {
         costs.set(key(next), cost);
         open.push(next);
@@ -111,7 +116,8 @@ export function canSkill(state: GameState, unit: Unit, target: Unit): boolean {
 export function damage(state: GameState, unit: Unit, target: Unit): number {
   const elevation = UNITS[unit.kind].range > 1 && tileAt(state, unit)?.terrain === 'ridge' ? 2 : 0;
   const cover = TERRAIN[tileAt(state, target)?.terrain ?? 'plain'].defense;
-  return Math.max(2, attackOf(unit) + elevation - armorOf(target) - cover);
+  const charge = hasStatus(unit, 'charge') ? CHARGE_BONUS : 0;
+  return Math.max(2, attackOf(unit) + elevation + charge - armorOf(target) - cover);
 }
 /** Damage a strike would really deal, including the goblin instant subdue. */
 export function strikeDamage(state: GameState, unit: Unit, target: Unit): number {
@@ -219,6 +225,11 @@ function endTurn(state: GameState): void {
       log(state, `${nameOf(holder)}踏上了月井！必须在下个敌方回合结束前将其击倒或逼退。`, 'objective');
     } else state.objectiveCounter = 0;
   }
+  // Charge only lasts for the turn the knight moved in.
+  for (const unit of state.units) if (unit.statuses?.some(st => st.id === 'charge')) {
+    unit.statuses = unit.statuses.filter(st => st.id !== 'charge');
+    if (!unit.statuses.length) delete unit.statuses;
+  }
   state.active = opponent(state.active);
   state.turn++;
   if (state.active === 'orc') state.round++;
@@ -273,6 +284,7 @@ export function applyAction(source: GameState, action: Action): ActionResult {
     unit.r = action.to.r;
     unit.ap -= cost;
     log(state, `${nameOf(unit)}进入${TERRAIN[tileAt(state, unit)!.terrain].name}，消耗 ${cost} AP。`, 'move');
+    if (unit.kind === 'goblinKnight' && !hasStatus(unit, 'charge')) unit.statuses = [...(unit.statuses ?? []), { id: 'charge', turns: 1 }];
   } else {
     const target = state.units.find(u => u.id === action.targetId && u.hp > 0);
     if (!target) return { ok: false, error: '目标已离开战场。' };
@@ -282,6 +294,10 @@ export function applyAction(source: GameState, action: Action): ActionResult {
       const amount = strikeDamage(state, unit, target);
       target.hp = Math.max(0, target.hp - amount);
       unit.ap -= def.attackCost;
+      if (hasStatus(unit, 'charge')) {
+        unit.statuses = unit.statuses!.filter(st => st.id !== 'charge');
+        if (!unit.statuses.length) delete unit.statuses;
+      }
       log(state, snare ? `${nameOf(unit)}扑向${nameOf(target)}，一击将其制服。` : `${nameOf(unit)}攻击${nameOf(target)}，造成 ${amount} 点伤害。`, 'attack');
     } else {
       if (!canSkill(state, unit, target)) return { ok: false, error: '无法施放：请检查目标、射程、视线、AP 与技能冷却。' };
