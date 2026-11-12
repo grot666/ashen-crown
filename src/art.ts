@@ -1,7 +1,7 @@
 import { factionOf, genderOf, maxHp, nameOf } from './engine/game';
 import { portraitSvg } from './portraits';
 import { UNITS } from './engine/content';
-import type { Faction, Unit, UnitKind } from './engine/types';
+import type { Faction, Gender, Unit, UnitKind } from './engine/types';
 
 export const crown = '<path d="m4 8 6 5 6-10 6 10 6-5-3 17H7Z"/><path d="M9 21h14M16 8v9"/>';
 export const icon = (paths: string, cls = ''): string =>
@@ -29,28 +29,40 @@ export function crest(faction: Faction, className = ''): string {
   </svg>`;
 }
 
-const PORTRAIT_MAP: Partial<Record<UnitKind, string>> = {
+const ORC_PORTRAITS: Partial<Record<UnitKind, string>> = {
   warlord: 'warlord.jpg',
   brute: 'brute.jpg',
   raider: 'raider.jpg',
   shaman: 'shaman.jpg',
   goblin: 'goblin.jpg',
   goblinKnight: 'goblin.jpg',
-  ranger: 'ranger.jpg',
-  blade: 'blade.jpg',
-  oracle: 'oracle.jpg',
-  exile: 'elf-generic.jpg',
-  warden: 'elf-generic.jpg',
-  regent: 'oracle.jpg',
   totem: 'orc-generic.jpg',
 };
+
+const ELF_PORTRAITS: Partial<Record<UnitKind, Record<Gender, string>>> = {
+  ranger: { female: 'ranger-f.jpg', male: 'ranger-m.jpg' },
+  blade: { female: 'blade-f.jpg', male: 'blade-m.jpg' },
+  oracle: { female: 'oracle-f.jpg', male: 'oracle-m.jpg' },
+  exile: { female: 'exile-f.jpg', male: 'exile-m.jpg' },
+  warden: { female: 'warden-f.jpg', male: 'warden-m.jpg' },
+  regent: { female: 'regent-f.jpg', male: 'regent-m.jpg' },
+};
+
+/** Filename under assets/portraits/, or undefined when only the SVG fallback exists. */
+export function portraitFile(unit: Unit): string | undefined {
+  const gender = genderOf(unit);
+  if ((UNITS[unit.kind].faction === 'elf' || unit.kind === 'exile') && gender) {
+    return ELF_PORTRAITS[unit.kind]?.[gender];
+  }
+  return ORC_PORTRAITS[unit.kind];
+}
 
 /** Face/species follows the unit kind; banner colours follow the owner, so recruits read as allies.
  *  Prefer a PNG when one is mapped; if the file is missing the sibling SVG is shown.
  *  Pass `embedInSvg` when inserting into the board <svg>, so the bitmap lives in a foreignObject. */
 export function portrait(unit: Unit, large = false, embedInSvg = false): string {
   const svg = portraitSvg(unit.kind, factionOf(unit), genderOf(unit), large);
-  const png = PORTRAIT_MAP[unit.kind];
+  const png = portraitFile(unit);
   if (!png) return svg;
   const cls = large ? 'portrait-large' : embedInSvg ? 'portrait' : 'roster-portrait-img';
   const fallback = svg.replace('<svg ', '<svg hidden ');
