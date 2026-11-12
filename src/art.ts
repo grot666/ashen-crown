@@ -45,15 +45,18 @@ const PORTRAIT_MAP: Partial<Record<UnitKind, string>> = {
   totem: 'orc-generic.jpg',
 };
 
-/** Face/species follows the unit kind; banner colours follow the owner, so recruits read as allies. */
-export function portrait(unit: Unit, large = false): string {
+/** Face/species follows the unit kind; banner colours follow the owner, so recruits read as allies.
+ *  Prefer a PNG when one is mapped; if the file is missing the sibling SVG is shown.
+ *  Pass `embedInSvg` when inserting into the board <svg>, so the bitmap lives in a foreignObject. */
+export function portrait(unit: Unit, large = false, embedInSvg = false): string {
+  const svg = portraitSvg(unit.kind, factionOf(unit), genderOf(unit), large);
   const png = PORTRAIT_MAP[unit.kind];
-  if (png) {
-    const src = `assets/portraits/${png}`;
-    const cls = large ? 'portrait-large' : 'roster-portrait-img';
-    return `<img src="${src}" alt="${nameOf(unit)}" class="${cls}" loading="lazy" />`;
-  }
-  return portraitSvg(unit.kind, factionOf(unit), genderOf(unit), large);
+  if (!png) return svg;
+  const cls = large ? 'portrait-large' : embedInSvg ? 'portrait' : 'roster-portrait-img';
+  const fallback = svg.replace('<svg ', '<svg hidden ');
+  const img = `<img src="assets/portraits/${png}" alt="${nameOf(unit)}" class="${cls}" loading="lazy" onerror="this.hidden=true;this.style.setProperty('display','none','important');const s=this.parentElement&&this.parentElement.tagName==='foreignObject'?this.parentElement.nextElementSibling:this.nextElementSibling;if(s){s.removeAttribute('hidden');s.style.removeProperty('display')}" />`;
+  if (embedInSvg) return `<foreignObject class="portrait" x="0" y="0" width="120" height="130">${img}</foreignObject>${fallback}`;
+  return `${img}${fallback}`;
 }
 
 export const genderMark = (unit: Unit): string => {
