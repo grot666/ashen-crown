@@ -8,7 +8,7 @@ test('renders a playable battlefield, moves a unit and persists after reload', a
   await expect(page.getByRole('heading', { name: '黑棘隘口' })).toBeVisible();
   await expect(page.locator('.map-unit')).toHaveCount(10);
   await expect(page.locator('.hex')).toHaveCount(61);
-  const portraitSize = await page.locator('.map-unit .portrait').first().boundingBox();
+  const portraitSize = await page.locator('.map-unit .token-glyph').first().boundingBox();
   expect(portraitSize).not.toBeNull();
   expect(portraitSize!.width).toBeLessThan(80);
   await page.locator('.hex.reachable').first().click();

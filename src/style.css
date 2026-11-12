@@ -601,3 +601,6 @@ img[hidden], svg[hidden], foreignObject[hidden] { display: none !important; }
 .manage-portrait, .prisoner-portrait, .roster-portrait { position: relative; }
 .map-unit foreignObject.portrait,
 .map-unit .portrait { overflow: hidden; }
+
+.map-unit .token-glyph, .map-unit .token-gender { pointer-events: none; }
+.map-unit .token-gender text { font-family: "Segoe UI", "Noto Sans", "Noto Sans Symbols", sans-serif; }

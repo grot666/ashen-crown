@@ -1,4 +1,5 @@
-import { portrait, unitLabel } from './art';
+import { unitLabel } from './art';
+import { tokenMark } from './tokens';
 import { TERRAIN, UNITS } from './engine/content';
 import { canAttack, canSkill, factionOf, goblinSnare, isCampaign, living, maxAp, maxHp, reachable, scenarioFor } from './engine/game';
 import { equal, key, pixel } from './engine/hex';
@@ -74,8 +75,7 @@ export function renderBoard(state: GameState, options: BoardOptions): string {
         return `<g transform="translate(${x} ${y})" class="map-unit ${factionOf(unit)} ${unit.role ?? ''} ${recruit ? 'recruit' : ''} ${selected?.id === unit.id ? 'chosen' : ''} ${target ? (skill && factionOf(unit) === state.active ? 'heal-target' : 'attack-target') : ''} ${unit.ap < def.attackCost ? 'spent' : ''}" data-hex="${key(unit)}" data-unit-id="${unit.id}" role="button" tabindex="0" aria-label="${unitLabel(unit)}${target ? skill ? '，可施放技能' : '，可攻击' : ''}" filter="url(#unit-shadow)">
           <title>${unitLabel(unit)}</title>
           <ellipse cx="0" cy="19" rx="26" ry="13" fill="#0b120e" opacity=".55"/>
-          <path class="token-border" d="m0-37 27 15v38L0 33-27 16v-38Z" fill="${factionOf(unit) === 'orc' ? '#786246' : '#62877a'}" stroke-width="1.5"/>
-          <g transform="translate(-25 -34) scale(.4167)">${portrait(unit, false, true)}</g>
+          ${tokenMark(unit)}
           <path class="target-corners" d="M-31-18v-10h10m42 0h10v10M-31 9v10h10m42 0h10V9" fill="none" stroke-width="2"/>
           <rect x="-23" y="25" width="46" height="5" rx="2" fill="#18221c" stroke="#131d17" stroke-width="1"/>
           <rect x="-23" y="25" width="${46 * unit.hp / hpMax}" height="5" rx="2" fill="${unit.hp < hpMax * .35 ? '#d79b73' : factionOf(unit) === 'orc' ? '#c3a16a' : '#83b99e'}"/>
