@@ -1,7 +1,7 @@
 import { factionOf, genderOf, maxHp, nameOf } from './engine/game';
 import { portraitSvg } from './portraits';
 import { UNITS } from './engine/content';
-import type { Faction, Unit } from './engine/types';
+import type { Faction, Unit, UnitKind } from './engine/types';
 
 export const crown = '<path d="m4 8 6 5 6-10 6 10 6-5-3 17H7Z"/><path d="M9 21h14M16 8v9"/>';
 export const icon = (paths: string, cls = ''): string =>
@@ -29,8 +29,30 @@ export function crest(faction: Faction, className = ''): string {
   </svg>`;
 }
 
+const PORTRAIT_MAP: Partial<Record<UnitKind, string>> = {
+  warlord: 'warlord.jpg',
+  brute: 'brute.jpg',
+  raider: 'raider.jpg',
+  shaman: 'shaman.jpg',
+  goblin: 'goblin.jpg',
+  goblinKnight: 'goblin.jpg',
+  ranger: 'ranger.jpg',
+  blade: 'blade.jpg',
+  oracle: 'oracle.jpg',
+  exile: 'elf-generic.jpg',
+  warden: 'elf-generic.jpg',
+  regent: 'oracle.jpg',
+  totem: 'orc-generic.jpg',
+};
+
 /** Face/species follows the unit kind; banner colours follow the owner, so recruits read as allies. */
 export function portrait(unit: Unit, large = false): string {
+  const png = PORTRAIT_MAP[unit.kind];
+  if (png) {
+    const src = `assets/portraits/${png}`;
+    const cls = large ? 'portrait-large' : 'roster-portrait-img';
+    return `<img src="${src}" alt="${nameOf(unit)}" class="${cls}" loading="lazy" />`;
+  }
   return portraitSvg(unit.kind, factionOf(unit), genderOf(unit), large);
 }
 
