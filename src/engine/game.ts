@@ -4,7 +4,9 @@ import { nextRandom } from './rng';
 import { CAMPAIGN_PLAYER, scenarioOf, type Scenario } from './scenarios';
 import type { Action, ActionResult, BattleLog, Faction, GameState, Gender, Hex, Tile, Unit, UnitKind } from './types';
 
-export const opponent = (f: Faction): Faction => f === 'orc' ? 'elf' : 'orc';
+/** The other army in this battle. Two-faction battles only; `f` defaults to the side to move. */
+export const opponent = (state: GameState, f: Faction = state.active): Faction =>
+  f === state.player ? state.rival : state.player;
 export const factionOf = (unit: Unit): Faction => unit.owner;
 export const nameOf = (unit: Unit): string => unit.name ?? UNITS[unit.kind].name;
 export const maxHp = (unit: Unit): number => UNITS[unit.kind].hp + (unit.bonus?.hp ?? 0);
@@ -15,11 +17,12 @@ export const rangeOf = (unit: Unit): number => Math.max(1, UNITS[unit.kind].rang
 export const skillRangeOf = (unit: Unit): number => UNITS[unit.kind].skill.range + (UNITS[unit.kind].range > 1 ? unit.bonus?.range ?? 0 : 0);
 export const genderOf = (unit: Unit): Gender | undefined => unit.gender ?? UNITS[unit.kind].gender;
 /**
- * Goblin rule: a goblin's attack or skill against a female elf (not the boss) subdues her outright.
- * In campaign battles she is always captured (see captureChance); bosses are immune by design.
+ * Goblin rule: a goblin's attack or skill against a female elf or female vampire (not a boss or structure)
+ * subdues her outright. In campaign battles she is always captured (see captureChance).
  */
+export const SNAREABLE = new Set<Faction>(['elf', 'vampire']);
 export const goblinSnare = (unit: Unit, target: Unit): boolean =>
-  (unit.kind === 'goblin' || unit.kind === 'goblinKnight') && UNITS[target.kind].faction === 'elf' && factionOf(unit) !== factionOf(target) &&
+  (unit.kind === 'goblin' || unit.kind === 'goblinKnight') && SNAREABLE.has(UNITS[target.kind].faction) && factionOf(unit) !== factionOf(target) &&
   genderOf(target) === 'female' && target.role !== 'boss';
 export const hasStatus = (unit: Unit, id: string): boolean => !!unit.statuses?.some(s => s.id === id);
 export const living = (state: GameState, faction?: Faction): Unit[] =>
@@ -27,8 +30,8 @@ export const living = (state: GameState, faction?: Faction): Unit[] =>
 export const tileAt = (state: GameState, hex: Hex): Tile | undefined => state.tiles.find(t => equal(t, hex));
 export const unitAt = (state: GameState, hex: Hex): Unit | undefined => living(state).find(u => equal(u, hex));
 export const isAITurn = (state: GameState): boolean => state.mode === 'ai' && state.active !== state.player && !state.winner;
-export const isCampaign = (state: GameState): boolean => state.scenarioId !== 'skirmish';
 export const scenarioFor = (state: GameState): Scenario => scenarioOf(state.scenarioId);
+export const isCampaign = (state: GameState): boolean => !scenarioFor(state).fixed;
 
 export function buildTiles(scenario: Scenario): Tile[] {
   return disk(scenario.radius).map(h => ({ ...h, terrain: scenario.terrain[key(h)] ?? 'plain' }));
@@ -40,19 +43,32 @@ export function makeUnit(id: string, kind: UnitKind, owner: Faction, at: Hex, ex
   return unit;
 }
 
-export function createGame(mode: GameState['mode'] = 'ai', player: Faction = 'orc'): GameState {
-  const scenario = scenarioOf('skirmish');
+function sidesOf(scenario: Scenario, player: Faction): { player: Faction; rival: Faction; lead: Faction } {
+  const lead = scenario.lead ?? 'orc';
+  if (scenario.fixed) {
+    const owners = [...new Set(scenario.fixed.map(([kind]) => UNITS[kind].faction))];
+    const chosen = owners.includes(player) ? player : (owners[0] ?? 'orc');
+    const rival = owners.find(f => f !== chosen) ?? scenario.rival ?? 'elf';
+    return { player: chosen, rival, lead };
+  }
+  return { player, rival: scenario.rival ?? 'elf', lead };
+}
+
+export function createGame(mode: GameState['mode'] = 'ai', player: Faction = 'orc', scenarioId = 'skirmish'): GameState {
+  const scenario = scenarioOf(scenarioId);
+  const sides = sidesOf(scenario, player);
   return {
-    version: 2, scenarioId: 'skirmish', mode, player, active: 'orc', round: 1, turn: 1, winner: null, rng: 0, captureMod: 0, objectiveCounter: 0,
+    version: 3, scenarioId: scenario.id, mode, player: sides.player, rival: sides.rival, lead: sides.lead,
+    active: sides.lead, round: 1, turn: 1, winner: null, rng: 0, captureMod: 0, objectiveCounter: 0,
     tiles: buildTiles(scenario),
-    units: scenario.fixed!.map(([kind, q, r], i) => makeUnit(`u${i}`, kind, UNITS[kind].faction, { q, r })),
-    log: [{ round: 1, faction: 'orc', text: '黑棘隘口 · 灰牙氏族先行。王冠的废墟，容不下两面旗帜。', type: 'system' }],
+    units: (scenario.fixed ?? []).map(([kind, q, r], i) => makeUnit(`u${i}`, kind, UNITS[kind].faction, { q, r })),
+    log: [{ round: 1, faction: sides.lead, text: `${scenario.name} · ${FACTIONS[sides.lead].name}先行。${scenario.tagline}`, type: 'system' }],
   };
 }
 
 /** Builds a campaign battle. Player units must already carry their perk/morale bonuses and statuses. */
 export function createScenarioBattle(scenario: Scenario, playerUnits: Unit[], enemyBonus: Unit['bonus'], enemyStatuses: Unit['statuses'], seed: number, captureMod: number): GameState {
-  const enemy = opponent(CAMPAIGN_PLAYER);
+  const enemy = scenario.rival ?? 'elf';
   const units: Unit[] = playerUnits.map((u, i) => ({ ...u, ...scenario.playerSlots[i] }));
   if (scenario.escort) units.push(makeUnit('escort', 'totem', CAMPAIGN_PLAYER, scenario.escort, { role: 'escort' }));
   scenario.enemies.forEach(([kind, q, r, gender], i) => units.push(makeUnit(`e${i}`, kind, enemy, { q, r }, { ...(gender ? { gender } : {}), bonus: enemyBonus ? { ...enemyBonus } : undefined, statuses: enemyStatuses?.map(s => ({ ...s })) })));
@@ -61,7 +77,8 @@ export function createScenarioBattle(scenario: Scenario, playerUnits: Unit[], en
     units.push(makeUnit('boss', kind, enemy, { q, r }, { role: 'boss', ...(scenario.bossName ? { name: scenario.bossName } : {}), bonus: enemyBonus ? { ...enemyBonus } : undefined, statuses: [{ id: 'regen', turns: 99 }, ...(enemyStatuses ?? []).map(s => ({ ...s }))] }));
   }
   const state: GameState = {
-    version: 2, scenarioId: scenario.id, mode: 'ai', player: CAMPAIGN_PLAYER, active: CAMPAIGN_PLAYER, round: 1, turn: 1, winner: null,
+    version: 3, scenarioId: scenario.id, mode: 'ai', player: CAMPAIGN_PLAYER, rival: enemy, lead: CAMPAIGN_PLAYER,
+    active: CAMPAIGN_PLAYER, round: 1, turn: 1, winner: null,
     rng: seed >>> 0, captureMod, objectiveCounter: 0, tiles: buildTiles(scenario), units,
     log: [{ round: 1, faction: CAMPAIGN_PLAYER, text: `${scenario.chapter}「${scenario.name}」· ${scenario.objective.summary}。`, type: 'objective' }],
   };
@@ -69,10 +86,10 @@ export function createScenarioBattle(scenario: Scenario, playerUnits: Unit[], en
   return state;
 }
 
-/** 哥布林骑士's elf mount crosses forest as easily as open ground. */
+/** 哥布林骑士's elf mount, and the night-stalker's bat-wing, cross forest as easily as open ground. */
 export const CHARGE_BONUS = 3;
 export function terrainCost(unit: Unit, terrain: Tile['terrain']): number {
-  return unit.kind === 'goblinKnight' && terrain === 'forest' ? 1 : TERRAIN[terrain].cost;
+  return (unit.kind === 'goblinKnight' || unit.kind === 'nightStalker') && terrain === 'forest' ? 1 : TERRAIN[terrain].cost;
 }
 // Weighted flood-fill keeps movement, highlights, and AI on the same rules.
 export function reachable(state: GameState, unit: Unit): Map<string, number> {
@@ -129,7 +146,7 @@ export function skillAmount(unit: Unit, target: Unit): number {
   return skill.effect === 'heal' ? Math.min(skill.power, maxHp(target) - target.hp) : Math.min(skill.power, target.hp);
 }
 
-const CAPTURE_KIND: Partial<Record<UnitKind, number>> = { oracle: 0.15, shaman: 0.15, ranger: 0.05, blade: 0.05, raider: 0.05, warden: -0.1, warlord: -0.1 };
+const CAPTURE_KIND: Partial<Record<UnitKind, number>> = { oracle: 0.15, shaman: 0.15, bloodMage: 0.15, ranger: 0.05, blade: 0.05, raider: 0.05, thrall: 0.05, nightStalker: 0.05, warden: -0.1, warlord: -0.1, bloodKnight: -0.1, crimsonLord: -0.1 };
 /** Chance that a lethal blow from `attacker` takes `target` prisoner instead of killing it. 0 = impossible. */
 export function captureChance(state: GameState, attacker: Unit, target: Unit, viaSkill: boolean): number {
   const scenario = scenarioFor(state);
@@ -159,14 +176,14 @@ function campaignVerdict(state: GameState, winner: Faction): void {
 function checkVictory(state: GameState): void {
   if (state.winner) return;
   if (!isCampaign(state)) {
-    if (!living(state, 'orc').length) state.winner = 'elf';
-    else if (!living(state, 'elf').length) state.winner = 'orc';
-    if (state.winner) log(state, `${FACTIONS[state.winner].name}赢得战役。黑棘隘口，尘埃落定。`, 'system');
+    if (!living(state, state.player).length) state.winner = state.rival;
+    else if (!living(state, state.rival).length) state.winner = state.player;
+    if (state.winner) log(state, `${FACTIONS[state.winner].name}赢得战役。${scenarioFor(state).victoryText}`, 'system');
     return;
   }
   const scenario = scenarioFor(state);
   const player = state.player;
-  const enemy = opponent(player);
+  const enemy = opponent(state, player);
   const objective = scenario.objective;
   const escort = state.units.find(u => u.role === 'escort');
   const boss = state.units.find(u => u.role === 'boss');
@@ -183,7 +200,7 @@ function freeHexNear(state: GameState, hex: Hex): Hex | undefined {
 }
 function spawnReinforcements(state: GameState): void {
   const scenario = scenarioFor(state);
-  const enemy = opponent(state.player);
+  const enemy = opponent(state, state.player);
   for (const wave of scenario.reinforcements ?? []) {
     if (wave.round !== state.round) continue;
     const template = state.units.find(u => factionOf(u) === enemy && u.role !== 'boss');
@@ -230,12 +247,12 @@ function endTurn(state: GameState): void {
     unit.statuses = unit.statuses.filter(st => st.id !== 'charge');
     if (!unit.statuses.length) delete unit.statuses;
   }
-  state.active = opponent(state.active);
+  state.active = opponent(state);
   state.turn++;
-  if (state.active === 'orc') state.round++;
+  if (state.active === state.lead) state.round++;
   if (state.round > scenario.maxRounds) {
     if (!isCampaign(state)) return finish(state, 'draw', '四十轮交锋后，黑雾吞没隘口。双方撤军，战役平局。');
-    return campaignVerdict(state, scenario.onTimeout === 'player' ? state.player : opponent(state.player));
+    return campaignVerdict(state, scenario.onTimeout === 'player' ? state.player : opponent(state, state.player));
   }
   if (isCampaign(state) && state.active !== state.player) spawnReinforcements(state);
   for (const unit of living(state, state.active)) {
@@ -265,6 +282,15 @@ function resolveFall(state: GameState, unit: Unit, target: Unit, viaSkill: boole
     }
   }
   log(state, `${nameOf(target)}倒下，旗帜归于灰烬。`, 'death');
+}
+
+
+function siphon(state: GameState, unit: Unit, dealt: number, rate: number | undefined): void {
+  if (!rate || dealt <= 0) return;
+  const amount = Math.min(Math.floor(dealt * rate), maxHp(unit) - unit.hp);
+  if (amount <= 0) return;
+  unit.hp += amount;
+  log(state, `${nameOf(unit)}汲取伤口中的鲜血，恢复 ${amount} 点生命。`, 'skill');
 }
 
 export function applyAction(source: GameState, action: Action): ActionResult {
@@ -299,6 +325,7 @@ export function applyAction(source: GameState, action: Action): ActionResult {
         if (!unit.statuses.length) delete unit.statuses;
       }
       log(state, snare ? `${nameOf(unit)}扑向${nameOf(target)}，一击将其制服。` : `${nameOf(unit)}攻击${nameOf(target)}，造成 ${amount} 点伤害。`, 'attack');
+      if (!snare) siphon(state, unit, amount, def.lifesteal);
     } else {
       if (!canSkill(state, unit, target)) return { ok: false, error: '无法施放：请检查目标、射程、视线、AP 与技能冷却。' };
       const skill = def.skill;
@@ -307,6 +334,7 @@ export function applyAction(source: GameState, action: Action): ActionResult {
       unit.ap -= skill.cost;
       unit.cooldown = skill.cooldown;
       log(state, `${nameOf(unit)}施放「${skill.name}」，${nameOf(target)}${skill.effect === 'heal' ? '恢复' : '受到'} ${amount} 点${skill.effect === 'heal' ? '生命' : '伤害'}。`, 'skill');
+      if (skill.effect === 'damage' && !goblinSnare(unit, target)) siphon(state, unit, amount, skill.drain);
     }
     if (target.hp === 0) resolveFall(state, unit, target, action.type === 'skill');
   }

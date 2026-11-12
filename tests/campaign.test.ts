@@ -16,7 +16,7 @@ function act(state: GameState, action: Action): GameState {
   if (!result.ok) throw new Error(result.error);
   return result.state;
 }
-const enemyUnits = (s: GameState): Unit[] => s.units.filter(u => u.owner === 'elf');
+const enemyUnits = (s: GameState): Unit[] => s.units.filter(u => u.owner !== 'orc');
 /** Level-1 battle reduced to one orc and one weakened enemy standing next to each other on open ground. */
 function finisher(seed: number, kind: Unit['kind'] = 'oracle'): GameState {
   const state = startBattle(newCampaign(seed)).battle!;
@@ -35,10 +35,10 @@ function seedFor(chance: number, success: boolean): number {
 }
 
 describe('scenario data', () => {
-  it('defines seven campaign levels (two acts) with valid deployments, Chinese briefings and story scenes', () => {
-    expect(CAMPAIGN).toHaveLength(7);
-    expect(CAMPAIGN.map(s => s.objective.type)).toEqual(['timed', 'escort', 'defend', 'boss', 'eliminate', 'escort', 'boss']);
-    expect(new Set(CAMPAIGN.map(s => s.id)).size).toBe(7);
+  it('defines nine campaign levels (three acts) with valid deployments, Chinese briefings and story scenes', () => {
+    expect(CAMPAIGN).toHaveLength(9);
+    expect(CAMPAIGN.map(s => s.objective.type)).toEqual(['timed', 'escort', 'defend', 'boss', 'eliminate', 'escort', 'boss', 'eliminate', 'boss']);
+    expect(new Set(CAMPAIGN.map(s => s.id)).size).toBe(9);
     for (const s of CAMPAIGN) {
       expect(s.story?.length).toBeGreaterThanOrEqual(3);
       expect(s.epilogue?.length).toBeGreaterThanOrEqual(3);
@@ -314,7 +314,7 @@ describe('save v2', () => {
   it('rejects forged campaigns', () => {
     const c = newCampaign(1);
     const forged = [
-      { ...c, version: 1 }, { ...c, morale: 101 }, { ...c, level: 9 }, { ...c, perks: ['godmode'] }, { ...c, perks: ['oathbreak', 'oathbreak'] },
+      { ...c, version: 1 }, { ...c, morale: 101 }, { ...c, level: 11 }, { ...c, perks: ['godmode'] }, { ...c, perks: ['oathbreak', 'oathbreak'] },
       { ...c, roster: [...c.roster, ...c.roster] }, { ...c, phase: 'battle' }, { ...c, deploy: ['nobody'] }, { ...c, phase: 'camp' },
     ];
     forged.forEach(f => expect(validCampaign(f)).toBe(false));

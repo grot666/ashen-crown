@@ -108,3 +108,15 @@ test('warns when browser persistence is unavailable', async ({ page }) => {
   await page.locator('.hex.reachable').first().click();
   await expect(page.getByRole('status')).toContainText('浏览器拒绝保存进度');
 });
+
+test('can start a skirmish against the Crimson Court', async ({ page }) => {
+  await page.goto('./#/skirmish');
+  await page.getByRole('button', { name: '新战役', exact: true }).click();
+  await page.locator('[data-scenario="crimson-moor"]').click();
+  await page.getByRole('button', { name: '部署军团，进入战场' }).click();
+  await expect(page.getByRole('heading', { name: '血雾荒原' })).toBeVisible();
+  await expect(page.locator('.token-glyph')).toHaveCount(10);
+  await expect(page.getByText('绛夜宫廷').first()).toBeAttached();
+  await expect(page.getByText('绛夜领主', { exact: false }).first()).toBeAttached();
+});
+

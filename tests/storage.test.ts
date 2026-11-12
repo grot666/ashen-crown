@@ -12,7 +12,7 @@ describe('versioned campaign storage', () => {
   });
   it('rejects invalid versions, impossible turns, forged units, duplicate positions and altered maps', () => {
     const invalid = [
-      null, {}, { ...createGame(), version: 1 }, { ...createGame(), version: 3 }, { ...createGame(), turn: 8 },
+      null, {}, { ...createGame(), version: 1 }, { ...createGame(), version: 4 }, { ...createGame(), turn: 8 },
       { ...createGame(), winner: 'unknown' }, { ...createGame(), mode: 'multiplayer' },
     ];
     const hp = createGame(); hp.units[0].hp = 100000;
@@ -41,5 +41,24 @@ describe('versioned campaign storage', () => {
     expect(loadGame().status).toBe('error');
     expect(saveGame(createGame())).toBe(false);
     expect(console.warn).toHaveBeenCalledTimes(2);
+  });
+  it('migrates a v2 orc-vs-elf skirmish save to v3 with lead and rival', () => {
+    const memory = new Map<string, string>();
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => memory.get(key) ?? null,
+      setItem: (key: string, value: string) => memory.set(key, value),
+    });
+    const v2 = { ...createGame(), version: 2 } as Record<string, unknown>;
+    delete v2.lead;
+    delete v2.rival;
+    expect(validSave(v2)).toBe(true);
+    memory.set('ashen-crown:skirmish:v2', JSON.stringify(v2));
+    const result = loadGame();
+    expect(result.status).toBe('loaded');
+    if (result.status === 'loaded') {
+      expect(result.state.version).toBe(3);
+      expect(result.state.lead).toBe('orc');
+      expect(result.state.rival).toBe('elf');
+    }
   });
 });

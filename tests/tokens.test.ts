@@ -6,6 +6,7 @@ import type { UnitKind } from '../src/engine/types';
 const KINDS: UnitKind[] = [
   'warlord', 'brute', 'raider', 'shaman', 'goblin', 'goblinKnight', 'totem',
   'ranger', 'blade', 'oracle', 'exile', 'warden', 'regent',
+  'thrall', 'bloodKnight', 'nightStalker', 'bloodMage', 'crimsonLord',
 ];
 const hex = { q: 0, r: 0 };
 
@@ -28,7 +29,7 @@ describe('board token marks', () => {
     expect(recruitMark).toContain('token-glyph');
   });
 
-  it('shows a gender pip on elf and exile tokens, but not on orc kinds', () => {
+  it('shows a gender pip on elf, exile and vampire tokens, but not on orc kinds', () => {
     const female = tokenMark(makeUnit('a', 'ranger', 'elf', hex, { gender: 'female' }));
     const male = tokenMark(makeUnit('b', 'ranger', 'elf', hex, { gender: 'male' }));
     expect(female).toContain('>♀</text>');
@@ -36,5 +37,10 @@ describe('board token marks', () => {
     expect(female).not.toEqual(male);
     expect(tokenMark(makeUnit('c', 'warlord', 'orc', hex))).not.toMatch(/[♀♂]/);
     expect(tokenMark(makeUnit('d', 'exile', 'orc', hex))).toMatch(/[♀♂]/);
+    const vf = tokenMark(makeUnit('e', 'nightStalker', 'vampire', hex, { gender: 'female' }));
+    const vm = tokenMark(makeUnit('f', 'thrall', 'vampire', hex, { gender: 'male' }));
+    expect(vf).toContain('>♀</text>');
+    expect(vm).toContain('>♂</text>');
+    expect(vf).toContain('#3a1c24');
   });
 });

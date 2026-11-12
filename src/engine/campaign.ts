@@ -16,7 +16,7 @@ export const PERKS: Record<PerkId, PerkDefinition> = {
   captors: { name: '俘获之术', description: '俘获率 +10%', source: '审讯俘虏：如何让精灵放下武器' },
 };
 export const PERK_ORDER: PerkId[] = ['oathbreak', 'ridgewatch', 'bladestep', 'moonwell', 'patrols', 'captors'];
-const INTERROGATION_PREFERENCE: Partial<Record<UnitKind, PerkId>> = { warden: 'oathbreak', ranger: 'ridgewatch', blade: 'bladestep', oracle: 'moonwell' };
+const INTERROGATION_PREFERENCE: Partial<Record<UnitKind, PerkId>> = { warden: 'oathbreak', ranger: 'ridgewatch', blade: 'bladestep', oracle: 'moonwell', bloodKnight: 'oathbreak', nightStalker: 'bladestep', bloodMage: 'moonwell', thrall: 'captors' };
 
 export interface RosterUnit { id: string; kind: UnitKind; name: string; origin: 'native' | 'recruit' }
 /** `held` prisoners sit in the stockade (战俘营) and are decided later, at the pre-battle camp. */
@@ -248,7 +248,7 @@ export function resolvePrisoner(campaign: CampaignState, prisonerId: string, cho
     next.morale = clampMorale(campaign.morale + MORALE.torture);
     next.resistance = campaign.resistance + 1;
     next.stats.tortured++;
-    next.chronicle = [...campaign.chronicle, `${kindName}被押入灰烬地牢，消息传遍营地：士气高涨，暮誓王庭的抵抗也愈发决绝。`];
+    next.chronicle = [...campaign.chronicle, `${kindName}被押入灰烬地牢，消息传遍营地：士气高涨，敌军的抵抗也愈发决绝。`];
   }
   return next;
 }

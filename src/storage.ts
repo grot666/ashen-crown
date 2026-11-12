@@ -13,7 +13,7 @@ export const LEGACY_KEY = 'ashen-crown:campaign:v1';
 export type LoadResult<T = GameState> = { status: 'empty' } | { status: 'loaded'; state: T; migrated?: boolean } | { status: 'error'; message: string };
 const record = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const integer = (v: unknown, min: number, max: number): v is number => Number.isInteger(v) && typeof v === 'number' && v >= min && v <= max;
-const faction = (v: unknown): v is Faction => v === 'orc' || v === 'elf';
+const faction = (v: unknown): v is Faction => v === 'orc' || v === 'elf' || v === 'vampire';
 const kind = (v: unknown): v is UnitKind => typeof v === 'string' && Object.hasOwn(UNITS, v);
 const text = (v: unknown, max: number): v is string => typeof v === 'string' && v.length <= max;
 const LOG_TYPES = ['system', 'move', 'attack', 'skill', 'death', 'capture', 'objective'];
@@ -34,13 +34,16 @@ function validUnit(u: unknown, tiles: Tile[], radius: number): u is Unit {
     integer(u.q, -radius, radius) && integer(u.r, -radius, radius) && tiles.some(t => t.q === u.q && t.r === u.r && t.terrain !== 'water');
 }
 
-/** Structural validation of a v2 battle against its scenario map. */
+/** Structural validation of a v3 (or upgraded v2) battle against its scenario map. */
 export function validSave(value: unknown): value is GameState {
-  if (!record(value) || value.version !== 2 || typeof value.scenarioId !== 'string' || !Object.hasOwn(SCENARIOS, value.scenarioId)) return false;
+  if (!record(value) || (value.version !== 2 && value.version !== 3) || typeof value.scenarioId !== 'string' || !Object.hasOwn(SCENARIOS, value.scenarioId)) return false;
   const scenario = SCENARIOS[value.scenarioId];
   const limit = scenario.maxRounds + 1;
-  if (!faction(value.active) || !faction(value.player) || (value.mode !== 'ai' && value.mode !== 'local') ||
-    (value.winner !== null && value.winner !== 'orc' && value.winner !== 'elf' && value.winner !== 'draw') ||
+  const lead = value.version === 2 ? 'orc' : value.lead;
+  const rival = value.version === 2 ? 'elf' : value.rival;
+  if (!faction(value.active) || !faction(value.player) || !faction(lead) || !faction(rival) || lead === rival ||
+    (value.mode !== 'ai' && value.mode !== 'local') ||
+    (value.winner !== null && value.winner !== 'draw' && !faction(value.winner)) ||
     !integer(value.round, 1, limit) || !integer(value.turn, 1, limit * 2 - 1) || !integer(value.rng, 0, 4294967295) ||
     typeof value.captureMod !== 'number' || Math.abs(value.captureMod) > 2 || !integer(value.objectiveCounter, 0, 2) ||
     !Array.isArray(value.units) || !Array.isArray(value.tiles) || !Array.isArray(value.log)) return false;
@@ -55,11 +58,11 @@ export function validSave(value: unknown): value is GameState {
   const state = value as unknown as GameState;
   const alive = living(state);
   if (new Set(alive.map(key)).size !== alive.length) return false;
-  const expectedActive = state.turn % 2 ? 'orc' : 'elf';
+  const expectedActive = state.turn % 2 ? lead : rival;
   if (state.active !== expectedActive || state.round !== Math.floor((state.turn + 1) / 2)) return false;
-  if (state.scenarioId === 'skirmish') {
-    if (units.length !== scenario.fixed!.length || !units.every((u, i) => (u as Unit).kind === scenario.fixed![i][0] && (u as Unit).id === `u${i}`)) return false;
-    if (state.winner === null && (!living(state, 'orc').length || !living(state, 'elf').length)) return false;
+  if (scenario.fixed) {
+    if (units.length !== scenario.fixed.length || !units.every((u, i) => (u as Unit).kind === scenario.fixed![i][0] && (u as Unit).id === `u${i}`)) return false;
+    if (state.winner === null && (!living(state, lead as Faction).length || !living(state, rival as Faction).length)) return false;
     if (state.winner && state.winner !== 'draw' && alive.some(u => factionOf(u) !== state.winner)) return false;
     return state.winner !== 'draw' || state.round === limit;
   }
@@ -76,7 +79,8 @@ export function validLegacySave(value: unknown): boolean {
 export function migrateLegacy(value: Record<string, unknown>): GameState | null {
   if (!Array.isArray(value.units) || !value.units.every(u => record(u) && kind(u.kind))) return null;
   return {
-    ...(value as unknown as GameState), version: 2, scenarioId: 'skirmish', rng: 0, captureMod: 0, objectiveCounter: 0,
+    ...(value as unknown as GameState), version: 3, scenarioId: 'skirmish', rng: 0, captureMod: 0, objectiveCounter: 0,
+    lead: 'orc', rival: 'elf',
     units: (value.units as Unit[]).map(u => ({ ...u, owner: UNITS[u.kind].faction })),
   };
 }
@@ -131,7 +135,7 @@ function write(storageKey: string, value: unknown): boolean {
 
 /** Loads the skirmish battle; migrates a v1 save once (or discards it with a message). */
 export function loadGame(): LoadResult {
-  const current = read(SKIRMISH_KEY, validSave);
+  const current = read(SKIRMISH_KEY, validSave, upgradeBattle);
   if (current.status !== 'empty') return current;
   try {
     const raw = localStorage.getItem(LEGACY_KEY);
@@ -148,15 +152,26 @@ export function loadGame(): LoadResult {
   }
 }
 export const saveGame = (state: GameState): boolean => write(SKIRMISH_KEY, state);
+/** Promotes a v2 battle save to v3 by filling in the missing lead / rival fields (orc vs elf). */
+export function upgradeBattle(value: unknown): unknown {
+  if (!record(value) || value.version !== 2) return value;
+  return { ...value, version: 3, lead: value.lead ?? 'orc', rival: value.rival ?? 'elf' };
+}
+
 /**
- * Upgrades older v2 campaign saves in place: adds the 军饷 war chest and, for runs that had finished the
- * original four levels, reopens the road so the new chapters can be played.
+ * Upgrades older v2 campaign saves in place: adds the 军饷 war chest, promotes in-progress battles to
+ * GameState v3, and reopens a completed run when new chapters have been added.
  */
 export function upgradeCampaign(value: unknown): unknown {
   if (!record(value) || value.version !== 2) return value;
   const out: Record<string, unknown> = { ...value };
   if (out.gold === undefined && Number.isInteger(out.level)) out.gold = defaultGold(out.level as number);
-  if (out.phase === 'complete' && Number.isInteger(out.level) && (out.level as number) < CAMPAIGN.length) out.phase = 'map';
+  if (out.battle && record(out.battle)) out.battle = upgradeBattle(out.battle);
+  if (out.phase === 'complete' && Number.isInteger(out.level) && (out.level as number) < CAMPAIGN.length) {
+    out.phase = 'map';
+    const note = '王冠重燃的火焰引来了绛夜宫廷。征途尚未结束。';
+    if (Array.isArray(out.chronicle) && !out.chronicle.includes(note)) out.chronicle = [...(out.chronicle as unknown[]), note];
+  }
   return out;
 }
 const validUpgradedCampaign = (value: unknown): value is CampaignState => validCampaign(value);

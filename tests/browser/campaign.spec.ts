@@ -22,8 +22,8 @@ test('starts the main campaign, deploys from the briefing and resumes the battle
   await page.goto('./');
   await expect(page.getByRole('heading', { name: /灰烬征途/ })).toBeVisible();
   await page.getByRole('button', { name: '开始主线战役' }).click();
-  await expect(page.locator('.level-card')).toHaveCount(7);
-  await expect(page.locator('.level-card.locked')).toHaveCount(6);
+  await expect(page.locator('.level-card')).toHaveCount(9);
+  await expect(page.locator('.level-card.locked')).toHaveCount(8);
   await expect(page.getByRole('meter', { name: '军队士气' }).first()).toHaveAttribute('aria-valuenow', '50');
   await page.getByRole('button', { name: '进入营地' }).click();
   await expect(page.getByRole('heading', { name: /焦土渡口/ })).toBeVisible();
@@ -126,7 +126,7 @@ test('war camp: hire, dismiss, forge a 哥布林骑士 from a held female elf, a
   const camp = { ...c, level: 4, gold: 300, phase: 'map' as const, prisoners: [{ id: 'pr-x', kind: 'ranger' as const, level: 3, gender: 'female' as const, held: true as const }] };
   await page.addInitScript(([k, v]) => { if (!localStorage.getItem(k)) localStorage.setItem(k, v); }, [KEY, JSON.stringify(camp)]);
   await page.goto('./');
-  await expect(page.locator('.level-card')).toHaveCount(7);
+  await expect(page.locator('.level-card')).toHaveCount(9);
   await page.getByRole('button', { name: '进入营地' }).click();
   await expect(page.getByRole('heading', { name: /营地 · 银叶伏击/ })).toBeVisible();
   await expect(page.locator('.story-scene')).toContainText('星誓祭司');
@@ -178,4 +178,26 @@ test('an old save that had finished the original four levels reopens the road to
   await page.goto('./');
   await expect(page.locator('.level-card.current')).toContainText('银叶伏击');
   await expect(page.locator('.campaign-heading')).toContainText('军饷 220');
+});
+
+test('a goblin previews and lands a guaranteed capture on a female vampire, but not on a male vampire', async ({ page }) => {
+  const c = startBattle({ ...newCampaign(11), level: 7 });
+  const battle = c.battle!;
+  const goblin = battle.units.find(u => u.kind === 'goblin')!;
+  Object.assign(goblin, { q: -2, r: 0, ap: 5 });
+  const enemies = battle.units.filter(u => u.owner === 'vampire');
+  Object.assign(enemies[0], { kind: 'nightStalker', gender: 'female', hp: 20, q: -1, r: 0 });
+  Object.assign(enemies[1], { kind: 'thrall', gender: 'male', hp: 20, q: -2, r: 1 });
+  c.phase = 'battle';
+  await page.addInitScript(([k, v]) => { localStorage.setItem(k, v); }, [KEY, JSON.stringify(c)]);
+  await page.goto('./');
+  await page.locator(`[data-unit-id="${goblin.id}"]`).click({ force: true });
+  await expect(page.locator('.unit-trait')).toContainText('擒拿');
+  const female = page.locator(`.target-list [data-target="${enemies[0].id}"]`);
+  const male = page.locator(`.target-list [data-target="${enemies[1].id}"]`);
+  await expect(female).toContainText('必杀 · 俘获 100%');
+  await expect(male).not.toContainText('必杀');
+  await female.click();
+  await expect(page.locator('.battle-log, [role="log"]').first()).toContainText('必定俘获');
+  expect(await page.evaluate(k => JSON.parse(localStorage.getItem(k)!).battle.units.find((u: { gender?: string; captured?: boolean }) => u.gender === 'female' && u.captured) !== undefined, KEY)).toBe(true);
 });

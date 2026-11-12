@@ -80,6 +80,6 @@ describe('war camp (营地)', () => {
     expect(up.phase).toBe('map');
     expect(up.gold).toBe(defaultGold(4));
     expect(validCampaign(up)).toBe(true);
-    expect(CAMPAIGN.slice(4).map(s => s.reward?.kind)).toEqual(['exile', 'brute', undefined]);
+    expect(CAMPAIGN.slice(4).map(s => s.reward?.kind)).toEqual(['exile', 'brute', undefined, 'nightStalker', undefined]);
   });
 });

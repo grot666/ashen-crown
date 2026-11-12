@@ -41,8 +41,12 @@ export interface Scenario {
   /** Campaign: pre-battle scene shown in the camp, and the scene after a victory. */
   story?: StoryLine[];
   epilogue?: StoryLine[];
-  /** Campaign: act label shown on the map (第一幕 / 第二幕). */
+  /** Campaign: act label shown on the map (第一幕 / 第二幕 / 第三幕). */
   act?: string;
+  /** Who moves first. Defaults to orc. */
+  lead?: Faction;
+  /** The opposing army (campaign enemy, or the non-default side of a skirmish). */
+  rival?: Faction;
 }
 export interface StoryLine { speaker: string; line: string }
 const say = (speaker: string, line: string): StoryLine => ({ speaker, line });
@@ -69,6 +73,27 @@ const SKIRMISH: Scenario = {
   ],
   playerSlots: [], enemies: [], captureBase: 0,
   victoryText: '黑棘隘口，尘埃落定。', defeatText: '黑棘隘口，尘埃落定。',
+};
+
+
+const CRIMSON_MOOR: Scenario = {
+  id: 'crimson-moor', chapter: '遭遇战', name: '血雾荒原', english: 'The Crimson Moors', tagline: '夜色里，有人闻到了王冠上的血。',
+  briefing: [], objective: { type: 'eliminate', twist: '遭遇战', summary: '消灭所有敌军' },
+  radius: 4, lead: 'orc', rival: 'vampire',
+  terrain: {
+    '0,0': 'ruins', '1,-1': 'ruins', '-1,1': 'ruins',
+    '-2,0': 'forest', '2,0': 'forest', '-1,-1': 'forest', '1,1': 'forest',
+    '-2,3': 'forest', '2,-3': 'forest', '-3,2': 'forest', '3,-2': 'forest',
+    '0,-3': 'ridge', '0,3': 'ridge', '-3,1': 'ridge', '3,-1': 'ridge',
+    '-1,-2': 'water', '1,2': 'water', '-2,2': 'water', '2,-2': 'water',
+  },
+  maxRounds: 40, onTimeout: 'draw',
+  fixed: [
+    ['warlord', -3, 1], ['brute', -3, 0], ['raider', -2, -1], ['raider', -4, 3], ['shaman', -4, 2],
+    ['crimsonLord', 3, -1], ['bloodKnight', 3, 0], ['nightStalker', 4, -3], ['thrall', 2, 1], ['bloodMage', 4, -2],
+  ],
+  playerSlots: [], enemies: [], captureBase: 0,
+  victoryText: '血雾散去，荒原重归寂静。', defeatText: '血雾散去，荒原重归寂静。',
 };
 
 export const CAMPAIGN: Scenario[] = [
@@ -342,7 +367,89 @@ export const CAMPAIGN: Scenario[] = [
     ],
     victoryText: '艾瑟琳倒下，王冠的火焰重新燃起。', defeatText: '星光吞没了圣所，灰牙的最后一击功亏一篑。',
   },
+
+  {
+    id: 'bloodroad', chapter: '第八关', name: '血雾驿道', english: 'The Bloodmist Road', tagline: '回家的路上，夜色忽然有了牙齿。',
+    briefing: [
+      '王冠重燃的火带有一股旧得发甜的血腥。那不是暮誓的月火——绛夜宫廷声称，那火焰本就属于他们。',
+      '血雾在驿道两侧的密林里游走。夜翼猎手踏林如履平地，血仆会从伤口里把血喝回去。',
+      '击溃这支先锋。女性吸血鬼与女性精灵一样，可被哥布林一击制服并俘获；首领与建筑除外。',
+    ],
+    objective: { type: 'eliminate', twist: '追击', summary: '在 14 轮内击溃绛夜先锋（含增援）' },
+    radius: 5,
+    terrain: {
+      '0,0': 'ruins', '1,-1': 'ruins', '-1,1': 'plain',
+      '-2,0': 'forest', '2,0': 'forest', '-3,1': 'forest', '3,-1': 'forest',
+      '-1,-2': 'forest', '1,2': 'forest', '0,-4': 'forest', '0,4': 'forest',
+      '2,-4': 'ridge', '-2,4': 'ridge', '4,-2': 'ridge',
+      '0,3': 'water', '1,-3': 'water', '-3,3': 'water', '3,-3': 'water',
+    },
+    maxRounds: 14, onTimeout: 'enemy',
+    playerSlots: [{ q: -4, r: 1 }, { q: -4, r: 2 }, { q: -3, r: 0 }, { q: -3, r: 1 }, { q: -3, r: 2 }, { q: -5, r: 3 }, { q: -5, r: 2 }],
+    enemies: [['bloodKnight', 3, -1], ['thrall', 2, 0], ['thrall', 3, 0, 'female'], ['nightStalker', 4, -3, 'female'], ['nightStalker', 2, 2, 'male'], ['bloodMage', 5, -2, 'female']],
+    reinforcements: [{ round: 4, text: '雾里响起翅翼的声音，又一支绛夜斥候沿着驿道压了上来。', units: [['thrall', 5, 0, 'male'], ['nightStalker', 4, 1, 'female'], ['bloodMage', 5, -1, 'male']] }],
+    captureBase: 0.3,
+    reward: { kind: 'nightStalker', name: '夜翼猎手·薇尔' },
+    rival: 'vampire', act: '第三幕 · 绛夜',
+    story: [
+      say(N, '圣所的篝火还没有熄。风忽然转向，把一股又冷又甜的气味送进营地。'),
+      say('萨满·乌尔娜', '这火里有血。不是我们刚洒的那种——更古老，像是被锁了很久。'),
+      say('菲尔温', '暮誓的典籍里写过：王冠的火不是月亮给的。更早的主人把血炼进去，然后把钥匙丢掉了。'),
+      say('督军·格罗什', '所以现在有人来讨债。'),
+      say(N, '驿道上的雾先红了一层。几个苍白的身影从林间踏出来，脚下的枯枝几乎没有声音。'),
+      say('血骑士·卡伦', '把火焰还来。它不属于牙齿和铁器。'),
+      say('哥布林·斯尼克', '不还。我们刚拿回来的。'),
+    ],
+    epilogue: [
+      say(N, '先锋溃散。雾散了一半，东方仍有一座更黑的轮廓。'),
+      say('督军·格罗什', '他们不会只派先锋。跟着血迹走。'),
+      say('萨满·乌尔娜', '那座城堡在喝雾。别在夜里停留太久。'),
+      say('菲尔温', '女爵的名字叫莫瑞娜。典籍说她从不自己走上驿道——她等人把火送回去。'),
+    ],
+    victoryText: '驿道上的血雾散开，通往绛夜城堡的路露了出来。', defeatText: '血雾吞没了队伍，先锋把火焰的气息带回了城堡。',
+  },
+  {
+    id: 'crimsonkeep', chapter: '第九关', name: '绛夜城堡', english: 'The Crimson Keep', tagline: '女爵坐在高座上，等火焰自己走回来。',
+    briefing: [
+      '绛夜城堡没有护城河，只有一层不散的血雾。女爵莫瑞娜坐在厅上，声称王冠的火是她的血炼成的。',
+      '击倒女爵。她每个回合恢复生命，血骑士与血法师会为她挡路；增援将从侧厅涌出。',
+      '女爵作为首领不受擒拿。其余女性吸血鬼仍可被哥布林一击制服并俘获。',
+    ],
+    objective: { type: 'boss', twist: '终局', summary: '在 20 轮内击倒绛夜女爵·莫瑞娜（每回合恢复 4 生命）' },
+    radius: 5,
+    terrain: {
+      '4,-1': 'ruins', '3,-2': 'ruins', '3,0': 'ruins',
+      '2,1': 'ridge', '-1,-2': 'ridge', '4,1': 'ridge',
+      '0,0': 'forest', '1,-1': 'forest', '-1,2': 'forest', '2,-4': 'forest', '1,3': 'forest', '-2,0': 'forest',
+      '0,-3': 'water', '1,-3': 'water', '0,3': 'water', '-1,3': 'water',
+    },
+    maxRounds: 20, onTimeout: 'enemy',
+    playerSlots: [{ q: -4, r: 1 }, { q: -4, r: 2 }, { q: -3, r: 0 }, { q: -3, r: 1 }, { q: -3, r: 2 }, { q: -5, r: 3 }, { q: -5, r: 2 }],
+    enemies: [['bloodKnight', 3, -1, 'male'], ['bloodMage', 5, -2, 'female'], ['nightStalker', 4, -4, 'female'], ['nightStalker', 2, 2, 'male'], ['thrall', 2, -2, 'male'], ['thrall', 5, -3, 'female']],
+    boss: ['crimsonLord', 4, -1],
+    bossName: '绛夜女爵·莫瑞娜',
+    reinforcements: [{ round: 4, text: '侧厅的铁门打开，宫廷侍卫从血雾里走了出来。', units: [['bloodKnight', 0, -5, 'male'], ['nightStalker', 1, 4, 'female'], ['bloodMage', 5, 0, 'male'], ['thrall', 4, 1, 'female']] }],
+    captureBase: 0.25,
+    rival: 'vampire', act: '第三幕 · 绛夜',
+    story: [
+      say(N, '城堡里没有火把。墙是干枯的深红，像被反复烘过的血。'),
+      say('绛夜女爵·莫瑞娜', '那顶王冠里的火，是我亲手炼进去的。你们不过是把锁砸开的盗贼。'),
+      say('督军·格罗什', '锁了四百年的东西，就不该再叫原主。'),
+      say('绛夜女爵·莫瑞娜', '火认识它的血。戴上它的人，夜里都会听到我的名字。'),
+      say('萨满·乌尔娜', '那就让她把名字留下，火跟我们走。'),
+    ],
+    epilogue: [
+      say(N, '女爵倒在高座下。王冠在格罗什掌心安定下来，不再发烫，也不再发出别人的气味。'),
+      say('绛夜女爵·莫瑞娜', '……火会记得谁喝过它。你们只是这一夜的主人。'),
+      say('督军·格罗什', '这一夜已经足够长。灰牙会守住它。'),
+      say(N, '雾从城墙上退下去。营地里重新燃起普通的篝火，兽人、哥布林，还有自愿留下的精灵，都坐在同一圈光里。'),
+      say('菲尔温', '长夜还在。只是再也没有人用它来锁谁。'),
+      say('哥布林·斯尼克', '那就好。我最讨厌锁。'),
+    ],
+    victoryText: '女爵倒下，血雾散尽。王冠终于只属于灰牙。', defeatText: '城堡收回了火焰，灰牙没能走出绛夜的厅堂。',
+  },
 ];
 
-export const SCENARIOS: Record<string, Scenario> = Object.fromEntries([SKIRMISH, ...CAMPAIGN].map(s => [s.id, s]));
+export const SKIRMISHES: Scenario[] = [SKIRMISH, CRIMSON_MOOR];
+export const SCENARIOS: Record<string, Scenario> = Object.fromEntries([...SKIRMISHES, ...CAMPAIGN].map(s => [s.id, s]));
 export const scenarioOf = (id: string): Scenario => SCENARIOS[id] ?? SKIRMISH;

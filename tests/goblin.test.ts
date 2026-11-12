@@ -33,8 +33,8 @@ describe('goblin snare (哥布林擒拿)', () => {
     expect(genderOf(makeUnit('c', 'warden', 'elf', { q: 0, r: 0 }, { gender: 'female' }))).toBe('female');
     expect(genderOf(makeUnit('d', 'goblin', 'orc', { q: 0, r: 0 }))).toBeUndefined();
     for (const level of CAMPAIGN.keys()) {
-      const elves = startBattle({ ...newCampaign(1), level }).battle!.units.filter(u => u.owner === 'elf');
-      const genders = new Set(elves.map(genderOf));
+      const enemies = startBattle({ ...newCampaign(1), level }).battle!.units.filter(u => u.owner !== 'orc');
+      const genders = new Set(enemies.map(genderOf));
       expect(genders.has('female') && genders.has('male')).toBe(true);
     }
   });

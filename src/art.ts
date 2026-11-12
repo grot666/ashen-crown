@@ -20,12 +20,17 @@ export const icons = {
   chevron: icon('<path d="m12 7 9 9-9 9"/>'),
 };
 
+const CREST_FILL: Record<Faction, string> = { orc: '#322b22', elf: '#1f3430', vampire: '#2a1218' };
+const CREST_MARK: Record<Faction, string> = {
+  orc: '<path d="m20 31 12 5 8-16 8 16 12-5-7 25-13 12-13-12Z" fill="currentColor" opacity=".8"/><path d="m28 43 8 3-3 5Zm24 0-8 3 3 5Z" fill="#22251f"/><path d="m32 60 2-9 6 5 6-5 2 9" fill="#22251f"/>',
+  elf: '<path d="M40 17c-19 17-22 32 0 49 22-17 19-32 0-49Z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M40 26v43M23 37l17 14 17-14M27 29l13 11 13-11M31 57l9-10 9 10" fill="none" stroke="currentColor" stroke-width="2"/>',
+  vampire: '<path d="M40 18c-8 14-8 24 0 40 8-16 8-26 0-40Z" fill="currentColor" opacity=".9"/><path d="M32 44h16l-8 18Z" fill="currentColor"/><path d="M28 28h24" stroke="currentColor" stroke-width="2"/><path d="M40 22v8" stroke="currentColor" stroke-width="2"/>',
+};
 export function crest(faction: Faction, className = ''): string {
   return `<svg class="crest ${className}" viewBox="0 0 80 90" aria-hidden="true">
-    <path d="m40 3 32 13-4 42-28 27L12 58 8 16Z" fill="${faction === 'orc' ? '#322b22' : '#1f3430'}" stroke="currentColor" stroke-width="1.2"/>
+    <path d="m40 3 32 13-4 42-28 27L12 58 8 16Z" fill="${CREST_FILL[faction]}" stroke="currentColor" stroke-width="1.2"/>
     <path d="m40 9 26 11-4 35-22 23-22-23-4-35Z" fill="none" stroke="currentColor" stroke-opacity=".25"/>
-    ${faction === 'orc' ? '<path d="m20 31 12 5 8-16 8 16 12-5-7 25-13 12-13-12Z" fill="currentColor" opacity=".8"/><path d="m28 43 8 3-3 5Zm24 0-8 3 3 5Z" fill="#22251f"/><path d="m32 60 2-9 6 5 6-5 2 9" fill="#22251f"/>' :
-      '<path d="M40 17c-19 17-22 32 0 49 22-17 19-32 0-49Z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M40 26v43M23 37l17 14 17-14M27 29l13 11 13-11M31 57l9-10 9 10" fill="none" stroke="currentColor" stroke-width="2"/>'}
+    ${CREST_MARK[faction]}
   </svg>`;
 }
 
@@ -39,21 +44,27 @@ const ORC_PORTRAITS: Partial<Record<UnitKind, string>> = {
   totem: 'orc-generic.jpg',
 };
 
-const ELF_PORTRAITS: Partial<Record<UnitKind, Record<Gender, string>>> = {
+const GENDERED_PORTRAITS: Partial<Record<UnitKind, Record<Gender, string>>> = {
   ranger: { female: 'ranger-f.jpg', male: 'ranger-m.jpg' },
   blade: { female: 'blade-f.jpg', male: 'blade-m.jpg' },
   oracle: { female: 'oracle-f.jpg', male: 'oracle-m.jpg' },
   exile: { female: 'exile-f.jpg', male: 'exile-m.jpg' },
   warden: { female: 'warden-f.jpg', male: 'warden-m.jpg' },
   regent: { female: 'regent-f.jpg', male: 'regent-m.jpg' },
+  thrall: { female: 'thrall-f.jpg', male: 'thrall-m.jpg' },
+  bloodKnight: { female: 'bloodKnight-f.jpg', male: 'bloodKnight-m.jpg' },
+  nightStalker: { female: 'nightStalker-f.jpg', male: 'nightStalker-m.jpg' },
+  bloodMage: { female: 'bloodMage-f.jpg', male: 'bloodMage-m.jpg' },
+  crimsonLord: { female: 'crimsonLord-f.jpg', male: 'crimsonLord-m.jpg' },
 };
 
 /** Filename under assets/portraits/, or undefined when only the SVG fallback exists. */
+export const isGenderedKind = (kind: UnitKind): boolean =>
+  UNITS[kind].faction === 'elf' || UNITS[kind].faction === 'vampire' || kind === 'exile';
+
 export function portraitFile(unit: Unit): string | undefined {
   const gender = genderOf(unit);
-  if ((UNITS[unit.kind].faction === 'elf' || unit.kind === 'exile') && gender) {
-    return ELF_PORTRAITS[unit.kind]?.[gender];
-  }
+  if (isGenderedKind(unit.kind) && gender) return GENDERED_PORTRAITS[unit.kind]?.[gender];
   return ORC_PORTRAITS[unit.kind];
 }
 
@@ -72,7 +83,7 @@ export function portrait(unit: Unit, large = false, embedInSvg = false): string 
 }
 
 export const genderMark = (unit: Unit): string => {
-  const g = UNITS[unit.kind].faction === 'elf' || unit.kind === 'exile' ? genderOf(unit) : undefined;
+  const g = isGenderedKind(unit.kind) ? genderOf(unit) : undefined;
   return g === 'female' ? '♀' : g === 'male' ? '♂' : '';
 };
 

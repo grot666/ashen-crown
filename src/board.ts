@@ -78,7 +78,7 @@ export function renderBoard(state: GameState, options: BoardOptions): string {
           ${tokenMark(unit)}
           <path class="target-corners" d="M-31-18v-10h10m42 0h10v10M-31 9v10h10m42 0h10V9" fill="none" stroke-width="2"/>
           <rect x="-23" y="25" width="46" height="5" rx="2" fill="#18221c" stroke="#131d17" stroke-width="1"/>
-          <rect x="-23" y="25" width="${46 * unit.hp / hpMax}" height="5" rx="2" fill="${unit.hp < hpMax * .35 ? '#d79b73' : factionOf(unit) === 'orc' ? '#c3a16a' : '#83b99e'}"/>
+          <rect x="-23" y="25" width="${46 * unit.hp / hpMax}" height="5" rx="2" fill="${unit.hp < hpMax * .35 ? '#d79b73' : factionOf(unit) === 'orc' ? '#c3a16a' : factionOf(unit) === 'vampire' ? '#c45a6a' : '#83b99e'}"/>
           ${Array.from({ length: apMax }, (_, i) => `<circle cx="${(i - (apMax - 1) / 2) * 7}" cy="36" r="2" fill="${i < unit.ap ? '#e2c99a' : '#435044'}"/>`).join('')}
           ${recruit ? '<g class="recruit-badge"><circle cx="22" cy="-30" r="7" fill="#3c3528" stroke="#e2c590"/><text x="22" y="-27" text-anchor="middle" font-size="8" fill="#e2c590">降</text></g>' : ''}
           ${target && selected && goblinSnare(selected, unit) && isCampaign(state) ? '<g class="snare-badge"><circle cx="-22" cy="-30" r="7" fill="#4a2f16" stroke="#ffcf7a"/><text x="-22" y="-27" text-anchor="middle" font-size="8" fill="#ffcf7a">擒</text></g>' : ''}

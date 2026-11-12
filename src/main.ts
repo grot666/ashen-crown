@@ -13,7 +13,7 @@ import {
   maxAp, maxHp, nameOf, rangeOf, scenarioFor, skillAmount, skillRangeOf, strikeDamage, tileAt, unitAt,
 } from './engine/game';
 import { distance } from './engine/hex';
-import { CAMPAIGN, type StoryLine } from './engine/scenarios';
+import { CAMPAIGN, SKIRMISHES, type StoryLine } from './engine/scenarios';
 import type { Action, Faction, GameState, Hex, Unit, UnitKind } from './engine/types';
 import { clearCampaign, loadCampaign, loadGame, saveCampaign, saveGame } from './storage';
 
@@ -47,12 +47,13 @@ function initialNotice(): void {
   }
   if (loadedCampaign.status === 'error') return notify(loadedCampaign.message, true);
   if (loadedCampaign.status === 'loaded') return notify('已恢复主线进度。每次行动都会自动保存。');
-  notify('两幕七场战役，一顶王冠。击倒的敌人有机会被生擒，带回营地发落。');
+  notify('三幕九场战役，一顶王冠。击倒的敌人有机会被生擒，带回营地发落。');
 }
 initialNotice();
 let dialog: Dialog | null = currentBattle()?.winner ? 'victory' : null;
 let setupMode: GameState['mode'] = 'ai';
 let setupFaction: Faction = 'orc';
+let setupScenario = 'skirmish';
 let boardScroll = 0;
 let lastFocus: HTMLElement | null = null;
 let confirmDismiss: string | null = null;
@@ -64,7 +65,7 @@ const pad = (n: number): string => String(n).padStart(2, '0');
 const LOG_KIND: Record<string, string> = { system: '军令', move: '行军', attack: '交锋', skill: '技能', death: '阵亡', capture: '俘获', objective: '目标' };
 const previewUnit = (kind: UnitKind, owner: Faction = UNITS[kind].faction, gender?: Unit['gender']): Unit => makeUnit(`preview-${kind}`, kind, owner, { q: 0, r: 0 }, gender ? { gender } : {});
 const prisonerUnit = (p: Prisoner): Unit => previewUnit(p.kind, UNITS[p.kind].faction, prisonerGender(p));
-const sexMark = (p: Prisoner): string => UNITS[p.kind].faction === 'elf' ? prisonerGender(p) === 'female' ? ' <span class="gender-mark">♀</span>' : prisonerGender(p) === 'male' ? ' <span class="gender-mark">♂</span>' : '' : '';
+const sexMark = (p: Prisoner): string => UNITS[p.kind].faction === 'elf' || UNITS[p.kind].faction === 'vampire' ? prisonerGender(p) === 'female' ? ' <span class="gender-mark">♀</span>' : prisonerGender(p) === 'male' ? ' <span class="gender-mark">♂</span>' : '' : '';
 const storyScene = (lines: StoryLine[] | undefined, title: string): string => lines?.length ? `<details class="story-scene" open><summary>${title}</summary>${lines.map(l => `<p class="${l.speaker === '旁白' ? 'narration' : ''}">${l.speaker === '旁白' ? '' : `<strong>${l.speaker}</strong>`}${l.line}</p>`).join('')}</details>` : '';
 const bonusTag = (value: number): string => value ? `<em class="bonus ${value > 0 ? 'up' : 'down'}">${value > 0 ? '+' : ''}${value}</em>` : '';
 
@@ -72,7 +73,7 @@ const bonusTag = (value: number): string => value ? `<em class="bonus ${value > 
 function roster(faction: Faction): string {
   const units = state.units.filter(u => factionOf(u) === faction);
   return `<div class="roster ${faction}">
-    <div class="roster-heading"><span>${faction === 'orc' ? 'I' : 'II'} / ${FACTIONS[faction].name}</span><span>${living(state, faction).length} / ${units.length}</span></div>
+    <div class="roster-heading"><span>${faction === state.player ? 'I' : 'II'} / ${FACTIONS[faction].name}</span><span>${living(state, faction).length} / ${units.length}</span></div>
     ${units.map(u => `<button class="roster-unit ${u.id === selectedId ? 'active' : ''} ${u.hp === 0 ? 'fallen' : ''}" data-unit="${u.id}" ${u.hp === 0 ? 'disabled' : ''} aria-label="查看${nameOf(u)}" aria-pressed="${u.id === selectedId}">
         <span class="roster-portrait">${portrait(u)}</span>
         <span class="roster-info"><strong>${nameOf(u)}</strong><span>${u.captured ? '已被俘获' : u.hp === 0 ? '已阵亡' : `${u.hp} / ${maxHp(u)} HP`}</span></span>
@@ -154,10 +155,13 @@ function objectiveStatus(): string {
 }
 
 function battleHeading(): string {
-  if (!isCampaign(state)) return `<section class="campaign-heading">
-      <div><div class="eyebrow"><span class="tiny-line"></span> THE ASHEN MARCHES <span class="muted"> / 遭遇战</span></div><h1>黑棘隘口<span>Blackthorn Pass</span></h1><p>旧王已死。新的秩序，始于灰烬。</p></div>
+  if (!isCampaign(state)) {
+    const scenario = scenarioFor(state);
+    return `<section class="campaign-heading">
+      <div><div class="eyebrow"><span class="tiny-line"></span> THE ASHEN MARCHES <span class="muted"> / 遭遇战</span></div><h1>${scenario.name}<span>${scenario.english}</span></h1><p>${scenario.tagline}</p></div>
       <div class="campaign-actions"><span class="mode-tag"><i></i>${state.mode === 'ai' ? '单人 · 战术 AI' : '本地双人 · 同屏对弈'}</span><button class="outline-button" data-action="new">${icons.flag}新战役</button></div>
     </section>`;
+  }
   const scenario = scenarioFor(state);
   const tier = moraleTier(campaign!.morale);
   return `<section class="campaign-heading">
@@ -175,11 +179,11 @@ function battleScreen(): string {
       <section class="war-table" aria-label="战棋对局">
         <aside class="army-panel">
           <div class="panel-label"><span>参战军团</span><small>ORDER OF BATTLE</small></div>
-          <div class="faction-summary orc">${crest('orc')}<span><strong>灰牙氏族</strong><small>铁与火，铸成王座。</small></span><span class="faction-count">${living(state, 'orc').length}<small>UNITS</small></span></div>
-          ${roster('orc')}
+          <div class="faction-summary ${state.player}">${crest(state.player)}<span><strong>${FACTIONS[state.player].name}</strong><small>${FACTIONS[state.player].motto}</small></span><span class="faction-count">${living(state, state.player).length}<small>UNITS</small></span></div>
+          ${roster(state.player)}
           <div class="armies-divider"><span>VS</span></div>
-          <div class="faction-summary elf">${crest('elf')}<span><strong>暮誓王庭</strong><small>月下的誓言，未曾凋零。</small></span><span class="faction-count">${living(state, 'elf').length}<small>UNITS</small></span></div>
-          ${roster('elf')}
+          <div class="faction-summary ${state.rival}">${crest(state.rival)}<span><strong>${FACTIONS[state.rival].name}</strong><small>${FACTIONS[state.rival].motto}</small></span><span class="faction-count">${living(state, state.rival).length}<small>UNITS</small></span></div>
+          ${roster(state.rival)}
           <div class="army-footnote">${icons.shield}<span>${isCampaign(state) ? '命中无随机 · 仅俘获需掷骰<br/>只有你的决策' : '无随机命中 · 无氪金<br/>只有你的决策'}</span></div>
         </aside>
         <section class="battlefield">
@@ -229,21 +233,23 @@ function campaignHeading(eyebrow: string, title: string, english: string, taglin
   return `<section class="campaign-heading"><div><div class="eyebrow"><span class="tiny-line"></span> 灰烬征途 <span class="muted"> / ${eyebrow}</span></div><h1>${title}<span>${english}</span></h1><p>${tagline}</p></div><div class="campaign-actions">${actions}</div></section>`;
 }
 function routeMap(c: CampaignState | null): string {
-  const nodes = [[60, 230], [160, 150], [260, 215], [360, 120], [470, 190], [570, 110], [670, 170]];
+  const nodes = [[50, 230], [140, 150], [230, 215], [320, 120], [410, 190], [500, 110], [590, 170], [700, 120], [800, 190]];
   const level = c?.level ?? -1;
-  return `<svg class="route-map" viewBox="0 0 780 290" role="img" aria-label="征途地图">
-    <path d="M20 260 C40 240 50 235 60 230 S140 150 160 150 240 215 260 215 340 120 360 120 450 190 470 190 550 110 570 110 650 170 670 170 730 70 740 40" fill="none" stroke="#c9ad7655" stroke-width="2" stroke-dasharray="6 7"/>
-    <text x="210" y="275" text-anchor="middle" class="route-label">第一幕 · 夺冠</text><text x="570" y="275" text-anchor="middle" class="route-label">第二幕 · 冷冠</text>
-    <path d="M415 80v190" stroke="#c9ad7633" stroke-dasharray="3 6"/>
+  const numerals = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX'];
+  return `<svg class="route-map" viewBox="0 0 920 290" role="img" aria-label="征途地图">
+    <path d="M16 260 C36 240 40 235 50 230 S120 150 140 150 210 215 230 215 300 120 320 120 390 190 410 190 480 110 500 110 570 170 590 170 670 120 700 120 760 190 800 190 860 80 880 50" fill="none" stroke="#c9ad7655" stroke-width="2" stroke-dasharray="6 7"/>
+    <text x="185" y="275" text-anchor="middle" class="route-label">第一幕 · 夺冠</text><text x="500" y="275" text-anchor="middle" class="route-label">第二幕 · 冷冠</text><text x="760" y="275" text-anchor="middle" class="route-label">第三幕 · 绛夜</text>
+    <path d="M365 80v190" stroke="#c9ad7633" stroke-dasharray="3 6"/>
+    <path d="M645 80v190" stroke="#c9ad7633" stroke-dasharray="3 6"/>
     ${nodes.map(([x, y], i) => {
       const done = i < level; const current = i === level;
       return `<g transform="translate(${x} ${y})" class="route-node ${done ? 'done' : current ? 'current' : 'locked'}">
         <circle r="${current ? 24 : 18}" fill="${done ? '#4a422a' : current ? '#6d5934' : '#1b241e'}" stroke="${done || current ? '#e2c590' : '#55604f'}" stroke-width="1.5"/>
-        <text y="6" text-anchor="middle" class="route-num">${['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'][i]}</text>
+        <text y="6" text-anchor="middle" class="route-num">${numerals[i]}</text>
         <text y="${current ? 46 : 40}" text-anchor="middle" class="route-label">${CAMPAIGN[i].name}</text>
       </g>`;
     }).join('')}
-    <g transform="translate(740 40)" class="route-crown"><path d="m-14 6 4-14 6 7 4-10 4 10 6-7 4 14Z" fill="${level >= CAMPAIGN.length ? '#e2c590' : '#55604f'}"/></g>
+    <g transform="translate(880 50)" class="route-crown"><path d="m-14 6 4-14 6 7 4-10 4 10 6-7 4 14Z" fill="${level >= CAMPAIGN.length ? '#e2c590' : '#55604f'}"/></g>
   </svg>`;
 }
 function levelCards(c: CampaignState | null): string {
@@ -255,7 +261,7 @@ function levelCards(c: CampaignState | null): string {
   }).join('')}</div>`;
 }
 function intro(): string {
-  return `${campaignHeading('主线战役', '灰烬征途', 'The Ashen Road', '两幕七场战役，一顶王冠。俘获、审讯、招募、整军——每个选择都会跟着你走到最后。')}
+  return `${campaignHeading('主线战役', '灰烬征途', 'The Ashen Road', '三幕九场战役，一顶王冠。俘获、审讯、招募、整军——每个选择都会跟着你走到最后。')}
     <section class="campaign-grid">
       <div class="campaign-panel">${routeMap(null)}${levelCards(null)}
         <button class="primary wide" data-action="campaign-new">${icons.crown}开始主线战役</button></div>
@@ -414,7 +420,7 @@ function campScreen(c: CampaignState): string {
     </section>${noticeBar()}`;
 }
 function completeScreen(c: CampaignState): string {
-  return `${campaignHeading('终章', '灰烬王冠，重燃于灰牙', 'The Crown Burns Again', '摄政已倒，长夜已尽。新的秩序，始于灰烬。', `<button class="outline-button" data-action="reset">${icons.flag}再次踏上征途</button>`)}
+  return `${campaignHeading('终章', '灰烬王冠，重燃于灰牙', 'The Crown Burns Again', '摄政已倒，女爵已逝。新的秩序，始于灰烬。', `<button class="outline-button" data-action="reset">${icons.flag}再次踏上征途</button>`)}
     <section class="result-card win">${crest('orc')}
       <div class="result-stats"><div><strong>${c.stats.victories}</strong><span>胜利</span></div><div><strong>${c.stats.captured}</strong><span>俘获</span></div><div><strong>${c.stats.recruited}</strong><span>招募</span></div><div><strong>${c.stats.interrogated}</strong><span>审讯</span></div><div><strong>${c.stats.tortured}</strong><span>酷刑</span></div></div>
       ${moraleMeter(c.morale)}${perkList(c)}
@@ -435,16 +441,23 @@ function campaignScreen(): string {
 
 // ───────────────────────── dialogs ─────────────────────────
 function dialogContent(): string {
-  if (dialog === 'new') return `
-    <span class="eyebrow">A NEW SKIRMISH</span><h2>战火，再度燃起。</h2><p class="dialog-lead">黑棘隘口没有永恒的王。选择你的旗帜，写下这一夜的结局。</p>
+  if (dialog === 'new') {
+    const scenario = SKIRMISHES.find(s => s.id === setupScenario) ?? SKIRMISHES[0];
+    const sides = [...new Set((scenario.fixed ?? []).map(([kind]) => UNITS[kind].faction))];
+    const blurb: Record<Faction, string> = { orc: '坚甲 · 近战 · 压迫', elf: '远射 · 机动 · 精准', vampire: '吸血 · 夜翼 · 血法' };
+    return `
+    <span class="eyebrow">A NEW SKIRMISH</span><h2>战火，再度燃起。</h2><p class="dialog-lead">选择战场与旗帜，写下这一夜的结局。</p>
+    <h3 class="field-label">战场</h3>
+    <div class="scenario-options">${SKIRMISHES.map(s => `<button data-scenario="${s.id}" class="${setupScenario === s.id ? 'active' : ''}" aria-pressed="${setupScenario === s.id}"><strong>${s.name}</strong><small>${s.english} · ${s.tagline}</small></button>`).join('')}</div>
     <h3 class="field-label">对局模式</h3><div class="segmented">
       <button data-mode="ai" class="${setupMode === 'ai' ? 'active' : ''}" aria-pressed="${setupMode === 'ai'}">对抗战术 AI<small>独自指挥一支军团</small></button>
       <button data-mode="local" class="${setupMode === 'local' ? 'active' : ''}" aria-pressed="${setupMode === 'local'}">本地双人<small>同屏轮流指挥双方</small></button>
     </div>
-    <h3 class="field-label">${setupMode === 'ai' ? '你的阵营' : '首位指挥官 · 兽人固定先行'}</h3>
-    <div class="faction-options">${(['orc', 'elf'] as const).map(f => `<button data-faction="${f}" class="${f} ${setupFaction === f ? 'active' : ''}" aria-pressed="${setupFaction === f}">${crest(f)}<strong>${FACTIONS[f].name}</strong><small>${f === 'orc' ? '坚甲 · 近战 · 压迫' : '远射 · 机动 · 精准'}</small></button>`).join('')}</div>
-    <p class="fine-print">当前遭遇战进度将被替换（主线进度不受影响）。兽人先行；每阵营 5 个单位。所有战斗均在本地运行。</p>
+    <h3 class="field-label">${setupMode === 'ai' ? '你的阵营' : '首位指挥官 · 先手方固定先行'}</h3>
+    <div class="faction-options">${sides.map(f => `<button data-faction="${f}" class="${f} ${setupFaction === f ? 'active' : ''}" aria-pressed="${setupFaction === f}">${crest(f)}<strong>${FACTIONS[f].name}</strong><small>${blurb[f]}</small></button>`).join('')}</div>
+    <p class="fine-print">当前遭遇战进度将被替换（主线进度不受影响）。先手方先行；每阵营 5 个单位。所有战斗均在本地运行。</p>
     <button class="primary start-battle" data-action="start">${icons.sword}部署军团，进入战场</button>`;
+  }
   if (dialog === 'help') return `
     <span class="eyebrow">THE COMMANDER'S FIELD GUIDE</span><h2>在灰烬中，学会取胜。</h2>
     <div class="rules-grid">
@@ -452,7 +465,7 @@ function dialogContent(): string {
       <section><span class="rule-number">02</span><h3>占据地利，而非只求先手</h3><p>荒原 / 王墟移动 1 AP，密林 / 高地移动 2 AP。密林防御 +2；王墟、高地防御 +1。高地上的远程单位普通攻击伤害 +2。深潭不可通行；单位阻挡移动，高地阻挡中间射线。</p></section>
       <section><span class="rule-number">03</span><h3>预判你的下一击</h3><p>红色角标为可攻击目标。普通伤害 = 攻击 + 高地加成 − 护甲 − 地形防御，最低 2。技能无视防御；治疗不能复活。技能冷却在己方回合开始时减 1，因此冷却 2 会跳过下一己方回合。</p></section>
       <section><span class="rule-number">05</span><h3>营地：整军再出征</h3><p>每关开战前进入营地：点「出战 / 待命」挑选出战单位，查看每个单位的属性与技能；「遣散」可让队员离队并退还部分军饷（督军不可遣散）；用胜利赚到的<strong>军饷</strong>招募哥布林、兽人小子、萨满、黑兽人，或雇佣自愿签约的<strong>精灵雇佣兵</strong>。战后在俘虏营可把俘虏「收押」进战俘营。<strong>哥布林骑士</strong>：一名哥布林 + 一名收押的女性精灵俘虏，合成后成为 6 AP 骑兵，穿越密林只需 1 AP，移动后下一次普通攻击 +3，保留擒拿。</p></section>
-      <section><span class="rule-number">04</span><h3>主线：俘获与士气</h3><p>主线中击倒敌人有概率生擒（目标列表会显示「致命 · 俘获 %」）。战后在俘虏营审讯、招募或施以酷刑。士气高于 60 时攻击 +1，低于 40 时首回合 AP −1。<strong>哥布林擒拿：</strong>哥布林的攻击或技能命中女性精灵（♀）时一击制服并必定俘获（目标列表显示「必杀 · 俘获 100%」）；暮誓摄政等首领不受影响。遭遇战没有俘获，规则完全确定。</p></section>
+      <section><span class="rule-number">04</span><h3>主线：俘获与士气</h3><p>主线中击倒敌人有概率生擒（目标列表会显示「致命 · 俘获 %」）。战后在俘虏营审讯、招募或施以酷刑。士气高于 60 时攻击 +1，低于 40 时首回合 AP −1。<strong>哥布林擒拿：</strong>哥布林的攻击或技能命中女性精灵或女性吸血鬼（♀）时一击制服并必定俘获（目标列表显示「必杀 · 俘获 100%」）；摄政、女爵等首领不受影响。遭遇战没有俘获，规则完全确定。</p></section>
     </div>
     <div class="key-guide"><span><kbd>E</kbd> 结束回合</span><span><kbd>Esc</kbd> 取消技能 / 选择</span><span><kbd>H</kbd> 战地手册</span><span><kbd>Tab</kbd> + <kbd>Enter</kbd> 键盘操作</span></div>
     <p class="fine-print">21+ 主题定位 · 原创暗黑奇幻世界，包含战争与死亡的非写实描述，无露骨画面；并非官方年龄分级。自动存档仅保存在当前浏览器，无账号、无追踪、无网络对战。</p>
@@ -642,7 +655,7 @@ function switchView(next: View): void {
   selectedId = living(state, state.active)[0]?.id ?? null;
   skillMode = false;
   dialog = currentBattle()?.winner ? 'victory' : null;
-  notify(view === 'skirmish' ? '遭遇战：黑棘隘口。进度独立于主线保存。' : campaign ? '回到灰烬征途。' : '两幕七场战役，一顶王冠。击倒的敌人有机会被生擒，带回营地发落。');
+  notify(view === 'skirmish' ? `遭遇战：${scenarioFor(skirmish).name}。进度独立于主线保存。` : campaign ? '回到灰烬征途。' : '三幕九场战役，一顶王冠。击倒的敌人有机会被生擒，带回营地发落。');
   render();
   window.scrollTo?.({ top: 0 });
   void runAI();
@@ -662,7 +675,7 @@ function campaignAction(action: string): boolean {
     case 'retreat-confirm':
       if (campaign?.battle && !campaign.battle.winner) {
         dialog = null;
-        const lost = { ...campaign.battle, winner: 'elf' as const, log: [...campaign.battle.log, { round: campaign.battle.round, faction: campaign.battle.active, text: '灰牙氏族吹响撤退号角。', type: 'system' as const }] };
+        const lost = { ...campaign.battle, winner: campaign.battle.rival, log: [...campaign.battle.log, { round: campaign.battle.round, faction: campaign.battle.active, text: '灰牙氏族吹响撤退号角。', type: 'system' as const }] };
         setCampaign(concludeBattle({ ...campaign, battle: lost }));
       }
       return true;
@@ -674,7 +687,7 @@ function campaignAction(action: string): boolean {
 
 app.addEventListener('click', event => {
   if (!(event.target instanceof Element)) return;
-  const element = event.target.closest<HTMLElement | SVGElement>('[data-action], [data-hex], [data-unit], [data-target], [data-mode], [data-faction], [data-deploy], [data-prisoner], [data-dismiss], [data-hire], [data-forge-goblin]');
+  const element = event.target.closest<HTMLElement | SVGElement>('[data-action], [data-hex], [data-unit], [data-target], [data-mode], [data-faction], [data-scenario], [data-deploy], [data-prisoner], [data-dismiss], [data-hire], [data-forge-goblin]');
   if (!element) return;
   if (element.dataset.hex) {
     if (!currentBattle()) return;
@@ -714,21 +727,28 @@ app.addEventListener('click', event => {
   } else if (element.dataset.mode) {
     setupMode = element.dataset.mode === 'local' ? 'local' : 'ai';
     render();
+  } else if (element.dataset.scenario) {
+    setupScenario = element.dataset.scenario;
+    const scenario = SKIRMISHES.find(s => s.id === setupScenario);
+    const sides = [...new Set((scenario?.fixed ?? []).map(([kind]) => UNITS[kind].faction))];
+    if (!sides.includes(setupFaction)) setupFaction = sides[0] ?? 'orc';
+    render();
   } else if (element.dataset.faction) {
-    setupFaction = element.dataset.faction === 'elf' ? 'elf' : 'orc';
+    const picked = element.dataset.faction;
+    setupFaction = picked === 'elf' || picked === 'vampire' ? picked : 'orc';
     render();
   } else {
     const action = element.dataset.action ?? '';
     if (campaignAction(action)) return;
     switch (action) {
       case 'help': openDialog('help'); break;
-      case 'new': setupMode = state.mode; setupFaction = state.player; openDialog('new'); break;
+      case 'new': setupMode = state.mode; setupFaction = state.player; setupScenario = SKIRMISHES.some(s => s.id === state.scenarioId) ? state.scenarioId : 'skirmish'; openDialog('new'); break;
       case 'close': closeDialog(); break;
       case 'result': openDialog('victory'); break;
       case 'start':
         aiGeneration++;
         aiRunning = false;
-        skirmish = createGame(setupMode, setupFaction);
+        skirmish = createGame(setupMode, setupFaction, setupScenario);
         state = skirmish;
         selectedId = living(state, state.active)[0].id;
         skillMode = false;

@@ -37,7 +37,7 @@ function moveBonus(state: GameState, unit: Unit, moved: Hex): { score: number; p
 export function chooseAction(state: GameState): Action {
   if (state.winner) return { type: 'end' };
   const allies = living(state, state.active);
-  const enemies = living(state, opponent(state.active));
+  const enemies = living(state, opponent(state));
   const candidates: { action: Action; score: number }[] = [];
   for (const unit of allies) {
     const def = UNITS[unit.kind];

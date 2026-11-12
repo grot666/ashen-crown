@@ -1,6 +1,6 @@
-export type Faction = 'orc' | 'elf';
+export type Faction = 'orc' | 'elf' | 'vampire';
 export type Terrain = 'plain' | 'forest' | 'ridge' | 'ruins' | 'water';
-export type UnitKind = 'warlord' | 'brute' | 'raider' | 'shaman' | 'goblin' | 'goblinKnight' | 'exile' | 'warden' | 'ranger' | 'blade' | 'oracle' | 'regent' | 'totem';
+export type UnitKind = 'warlord' | 'brute' | 'raider' | 'shaman' | 'goblin' | 'goblinKnight' | 'exile' | 'warden' | 'ranger' | 'blade' | 'oracle' | 'regent' | 'totem' | 'thrall' | 'bloodKnight' | 'nightStalker' | 'bloodMage' | 'crimsonLord';
 export type Gender = 'female' | 'male';
 export interface Hex { q: number; r: number }
 export interface Tile extends Hex { terrain: Terrain }
@@ -13,6 +13,8 @@ export interface SkillDefinition {
   power: number;
   cost: number;
   cooldown: number;
+  /** Fraction of skill damage returned to the caster as healing. */
+  drain?: number;
 }
 export interface UnitDefinition {
   name: string;
@@ -29,6 +31,8 @@ export interface UnitDefinition {
   gender?: Gender;
   /** Special rule text shown in the unit dossier. */
   trait?: string;
+  /** Fraction of basic-attack damage returned to the attacker as healing. */
+  lifesteal?: number;
 }
 /** Temporary or permanent unit conditions, processed at the start of the owner's turn. */
 export type StatusId = 'slowed' | 'regen' | 'charge';
@@ -60,7 +64,7 @@ export interface BattleLog {
   type: 'system' | 'move' | 'attack' | 'skill' | 'death' | 'capture' | 'objective';
 }
 export interface GameState {
-  version: 2;
+  version: 3;
   scenarioId: string;
   units: Unit[];
   tiles: Tile[];
@@ -70,6 +74,10 @@ export interface GameState {
   winner: Faction | 'draw' | null;
   mode: 'ai' | 'local';
   player: Faction;
+  /** The opposing army in this battle (the non-player side). */
+  rival: Faction;
+  /** The side that moves first; a new round begins when this side becomes active again. */
+  lead: Faction;
   log: BattleLog[];
   /** Seeded RNG cursor (uint32). Only capture rolls consume it, so battles stay reproducible. */
   rng: number;

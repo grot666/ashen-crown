@@ -9,6 +9,8 @@ const orc = (kind: UnitKind) => makeUnit('u', kind, 'orc', hex);
 
 describe('portrait files', () => {
   const kinds: UnitKind[] = ['ranger', 'blade', 'oracle', 'exile', 'warden', 'regent'];
+  const vampires: UnitKind[] = ['thrall', 'bloodKnight', 'nightStalker', 'bloodMage', 'crimsonLord'];
+  const vamp = (kind: UnitKind, gender?: Gender) => makeUnit('u', kind, 'vampire', hex, gender ? { gender } : {});
 
   it('gives a female and a male elf of the same kind different files', () => {
     for (const kind of kinds) {
@@ -38,5 +40,21 @@ describe('portrait files', () => {
     expect(portrait(orc('brute'))).toContain('assets/portraits/brute.jpg');
     expect(portrait(elf('oracle', 'female'))).toContain('assets/portraits/oracle-f.jpg');
     expect(portrait(elf('oracle', 'male'))).toContain('assets/portraits/oracle-m.jpg');
+  });
+
+  it('gives each vampire kind its own female and male portrait files', () => {
+    const females = vampires.map(kind => portraitFile(vamp(kind, 'female')));
+    const males = vampires.map(kind => portraitFile(vamp(kind, 'male')));
+    expect(new Set(females).size).toBe(vampires.length);
+    expect(new Set(males).size).toBe(vampires.length);
+    expect(new Set([...females, ...males]).size).toBe(vampires.length * 2);
+    for (const kind of vampires) {
+      expect(portraitFile(vamp(kind, 'female'))).toBe(`${kind}-f.jpg`);
+      expect(portraitFile(vamp(kind, 'male'))).toBe(`${kind}-m.jpg`);
+    }
+    expect(portraitFile(vamp('nightStalker'))).toBe('nightStalker-f.jpg');
+    expect(genderOf(vamp('thrall'))).toBe('male');
+    expect(genderOf(vamp('crimsonLord'))).toBe('female');
+    expect(portrait(vamp('bloodMage', 'female'))).toContain('assets/portraits/bloodMage-f.jpg');
   });
 });

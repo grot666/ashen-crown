@@ -19,6 +19,11 @@ export const TOKEN_ROLE: Record<UnitKind, TokenRole> = {
   regent: 'leader',
   goblinKnight: 'cavalry',
   totem: 'structure',
+  thrall: 'melee',
+  bloodKnight: 'melee',
+  nightStalker: 'cavalry',
+  bloodMage: 'caster',
+  crimsonLord: 'leader',
 };
 
 interface Ink { fill: string; mark: string; shade: string; accent: string }
@@ -26,6 +31,7 @@ interface Ink { fill: string; mark: string; shade: string; accent: string }
 const INK: Record<Faction, Ink> = {
   orc: { fill: '#4a3f30', mark: '#f3e3b4', shade: '#1c1812', accent: '#e0b25a' },
   elf: { fill: '#243d36', mark: '#e7f6ef', shade: '#101a16', accent: '#9fd0c0' },
+  vampire: { fill: '#3a1c24', mark: '#f0c9c9', shade: '#1a0c10', accent: '#c45a6a' },
 };
 
 /** Distinct frame paths, sized to sit above the HP bar (~54×66). */
@@ -129,6 +135,40 @@ export function tokenGlyph(kind: UnitKind, mark = '#f3e3b4', shade = '#1c1812'):
         <path d="M12 2h6v20h-6Z" fill="${mark}"/>
         <circle cx="15" cy="3" r="5.5" fill="${mark}"/>
         <circle cx="15" cy="3" r="2.2" fill="${shade}"/>`;
+    case 'thrall':
+      // Broken collar ring and a single fang
+      return `<circle cx="0" cy="-8" r="14" fill="none" stroke="${mark}" stroke-width="3.4"/>
+        <path d="M-10-2  -4 8 2-2" fill="none" stroke="${mark}" stroke-width="3.2" ${STROKE}/>
+        <path d="M-2 8h10l-5 16Z" fill="${mark}"/>`;
+    case 'bloodKnight':
+      // Heater drop (blood) over a vertical sword
+      return `<path d="M-2-32h4v36h-4Z" fill="${mark}"/>
+        <path d="M-12-8h24v5H-12Z" fill="${mark}"/>
+        <path d="M-8-34h16l2 6H-10Z" fill="${mark}"/>
+        <path d="M0 6c-12 14-10 24 0 30 10-6 12-16 0-30Z" fill="${mark}"/>
+        <circle cx="0" cy="20" r="3" fill="${shade}"/>`;
+    case 'nightStalker':
+      // Bat wings and a small central body
+      return `<path d="M0-6C-10-28-26-22-28-8-18-16-10-8-4 4Z" fill="${mark}"/>
+        <path d="M0-6C10-28 26-22 28-8 18-16 10-8 4 4Z" fill="${mark}"/>
+        <ellipse cx="0" cy="2" rx="5" ry="8" fill="${mark}"/>
+        <circle cx="0" cy="-4" r="4" fill="${mark}"/>
+        <circle cx="0" cy="-4" r="1.6" fill="${shade}"/>`;
+    case 'bloodMage':
+      // Chalice with a drop above the rim
+      return `<path d="M-12-16h24l-3 10H-9Z" fill="${mark}"/>
+        <path d="M-7-6q7 14 0 18h14q-7-4 0-18" fill="${mark}"/>
+        <path d="M-3 12h6v10h-6Z" fill="${mark}"/>
+        <path d="M-10 22h20v4H-10Z" fill="${mark}"/>
+        <path d="M0-32c-7 10-6 16 0 20 6-4 7-10 0-20Z" fill="${mark}"/>`;
+    case 'crimsonLord':
+      // Low three-point circlet and a vertical blood drop
+      return `<path d="M-16-8-10-24-4-8Z" fill="${mark}"/>
+        <path d="M-4-8 0-28 4-8Z" fill="${mark}"/>
+        <path d="M4-8 10-24 16-8Z" fill="${mark}"/>
+        <path d="M-17-8h34v6H-17Z" fill="${mark}"/>
+        <path d="M0-2c-8 12-7 20 0 26 7-6 8-14 0-26Z" fill="${mark}"/>
+        <circle cx="0" cy="12" r="2.4" fill="${shade}"/>`;
   }
 }
 

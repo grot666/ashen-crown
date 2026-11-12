@@ -40,7 +40,7 @@ describe('campaign balance (AI vs AI)', () => {
     // skeleton crew must fail there; 3–4 need most of the warband.
     const skeleton = level < 2 ? 2 : 3;
     it(`${scenario.chapter}「${scenario.name}」is lost by an under-strength army (${skeleton} units)`, () => {
-      expect(simulate(campaignAt(level, 50, skeleton)).winner).toBe('elf');
+      expect(simulate(campaignAt(level, 50, skeleton)).winner).toBe(CAMPAIGN[level].rival ?? 'elf');
     });
   });
   it('perks and high morale do not make a winnable level unwinnable', () => {

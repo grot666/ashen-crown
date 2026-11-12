@@ -8,6 +8,7 @@ interface Palette { bg: string; inner: string; rim: string; glow: string }
 const BANNERS: Record<Faction, Palette> = {
   orc: { bg: '#3a3226', inner: '#2b261c', rim: '#c9ae76', glow: '#e0a55a' },
   elf: { bg: '#21392f', inner: '#182c24', rim: '#8eb6a2', glow: '#9fd0c0' },
+  vampire: { bg: '#3a1c24', inner: '#241016', rim: '#c46a72', glow: '#e07080' },
 };
 const INK = '#141a14';
 
@@ -228,11 +229,83 @@ function exile(female: boolean): string {
     ${female ? `<path d="M84 50q8 18 2 36" fill="none" stroke="${hair}" stroke-width="5" stroke-linecap="round"/>` : ''}`;
 }
 
+
+// ───────── vampires ─────────
+const VAMP_SKIN = '#d8c8c0';
+const VAMP_SHADE = '#b59a94';
+const VHAIR = { ink: '#1c1418', wine: '#6a2030', silver: '#e8e2dc', streak: '#cfc6c0' };
+function vampHead(female: boolean, hair: string, eye = '#c45a6a'): string {
+  const jaw = female ? 'M41 40q19-18 38 0l1 20q-3 18-20 26-17-8-20-26Z' : 'M40 40q20-18 40 0l1 21q-3 16-14 22l-7 3-7-3q-11-6-14-22Z';
+  return `${female ? `<path d="M34 40q26-34 52 0l6 56q-8 6-14 0l-2-40H44l-2 40q-6 6-14 0Z" fill="${hair}" stroke="${INK}" stroke-width="1.4"/>` : ''}
+    <path d="m42 52-20-14 8 20 12 6Zm36 0 20-14-8 20-12 6Z" fill="${VAMP_SHADE}" stroke="${INK}" stroke-width="1.3"/>
+    <path d="M52 78h16v12l-8 5-8-5Z" fill="${VAMP_SHADE}"/>
+    <path d="${jaw}" fill="${VAMP_SKIN}" stroke="${INK}" stroke-width="1.7"/>
+    <path d="M44 50q6-4 12-1m8 0q6-3 12 1" fill="none" stroke="${INK}" stroke-width="${female ? 1.4 : 2}" stroke-linecap="round"/>
+    <path d="M45 56q5-4 10 0-5 3-10 0Zm20 0q5-4 10 0-5 3-10 0Z" fill="${eye}" stroke="${INK}" stroke-width="1"/>
+    <circle cx="50" cy="56" r="1.3" fill="${INK}"/><circle cx="70" cy="56" r="1.3" fill="${INK}"/>
+    <path d="M60 58v8l-3 2" fill="none" stroke="${VAMP_SHADE}" stroke-width="1.6"/>
+    <path d="M54 75q6 ${female ? 3 : 2} 12 0" fill="none" stroke="${female ? '#8a3a42' : INK}" stroke-width="1.5"/>
+    <path d="m55 76-2 5 3-2Zm10 0 2 5-3-2Z" fill="#f4eee8" stroke="${INK}" stroke-width=".6"/>`;
+}
+function thrall(female: boolean): string {
+  const hair = female ? VHAIR.ink : '#2a2420';
+  return `${bust('#3a2a22', '#7a5a48')}
+    <path d="M40 96h40l-4 20H44Z" fill="#5a3a32" stroke="${INK}" stroke-width="1.2"/>
+    <path d="M28 88 90 118" stroke="#5c4030" stroke-width="6"/>
+    ${vampHead(female, hair, '#a84850')}
+    ${fringe(female, hair)}
+    ${female ? `<path d="M86 50q12 16 6 44" fill="none" stroke="${hair}" stroke-width="5" stroke-linecap="round"/>` : ''}`;
+}
+function bloodKnightV(female: boolean): string {
+  const hair = female ? VHAIR.ink : '#1a1618';
+  return `${bust('#2a2428', '#c45a6a')}
+    <path d="M8 108q4-22 30-24l4 18q-20 0-34 6Zm104 0q-4-22-30-24l-4 18q20 0 34 6Z" fill="#6a2030" stroke="${INK}" stroke-width="1.4"/>
+    <path d="M44 92h32l-4 28H48Z" fill="#3a3036" stroke="#c45a6a" stroke-width="1.2"/>
+    <path d="m60 96 5 7-5 7-5-7Z" fill="#c45a6a"/>
+    ${vampHead(female, hair, '#c45a6a')}
+    ${fringe(female, hair)}
+    <path d="M38 48q2-28 22-28t22 28l-6-2q-4-18-16-18T44 46Z" fill="#4a4448" stroke="${INK}" stroke-width="1.5"/>
+    ${female ? `<path d="M84 52q10 14 4 40" fill="none" stroke="${hair}" stroke-width="5" stroke-linecap="round"/>` : ''}`;
+}
+function nightStalker(female: boolean): string {
+  const hair = female ? VHAIR.wine : VHAIR.ink;
+  return `${bust('#1c1418', '#6a2030')}
+    <path d="M6 70q20-40 30-8-8 8-18 14Zm108 0q-20-40-30-8 8 8 18 14Z" fill="#2a1a22" stroke="${INK}" stroke-width="1.3"/>
+    <path d="M24 130q4-30 36-36 32 6 36 36" fill="#241820" stroke="${INK}" stroke-width="1.3"/>
+    ${vampHead(female, hair, '#e0a040')}
+    ${fringe(female, hair)}
+    <path d="M32 62q-4-48 28-50 32 2 28 50l-8-20q-8-16-20-16T40 42Z" fill="#2a1a22" stroke="${INK}" stroke-width="1.6"/>
+    ${female ? `<path d="M84 50q12 16 4 42" fill="none" stroke="${hair}" stroke-width="5" stroke-linecap="round"/>` : ''}`;
+}
+function bloodMage(female: boolean): string {
+  const hair = female ? VHAIR.silver : VHAIR.ink;
+  return `<path d="M102 40v70" stroke="#8a6a50" stroke-width="3"/><path d="M92 36h20l-3 10H95Z" fill="#8a8a8a" stroke="${INK}" stroke-width="1.1"/>
+    ${bust('#3a1420', '#c45a6a')}
+    <path d="M38 86q22-6 44 0l-4 10q-18-6-36 0Z" fill="#6a2030" stroke="${INK}" stroke-width="1.2"/>
+    ${vampHead(female, hair, '#c45a6a')}
+    ${fringe(female, hair)}
+    ${circlet('#c45a6a')}
+    ${female ? `<path d="M86 48q12 18 4 46" fill="none" stroke="${hair}" stroke-width="5" stroke-linecap="round"/>` : `<path d="M70 38q8-2 14 10" fill="none" stroke="#6a2030" stroke-width="3"/>`}`;
+}
+function crimsonLord(female: boolean): string {
+  const hair = female ? VHAIR.ink : VHAIR.streak;
+  return `${bust('#4a1420', '#d9c98f')}
+    <path d="M30 84q-6-16 8-24l8 24Zm60 0q6-16-8-24l-8 24Z" fill="#6a2030" stroke="${INK}" stroke-width="1.3"/>
+    <path d="M44 96h32l-4 26H48Z" fill="#2a1016" stroke="#d9c98f" stroke-width="1.2"/>
+    <path d="m60 100 5 6-5 6-5-6Z" fill="#c45a6a"/>
+    ${vampHead(female, hair, '#c45a6a')}
+    ${fringe(female, hair)}
+    ${circlet('#c45a6a')}
+    ${female ? `<path d="M36 40q-2 8 4 10m-6-4 8 2" stroke="${VHAIR.streak}" stroke-width="3" stroke-linecap="round"/><path d="M86 50q12 16 4 44" fill="none" stroke="${hair}" stroke-width="5" stroke-linecap="round"/>` : `<path d="M86 48q10 16 4 44" fill="none" stroke="${hair}" stroke-width="5" stroke-linecap="round"/>`}`;
+}
+
 export function portraitSvg(kind: UnitKind, owner: Faction, gender: Gender | undefined, large: boolean): string {
   const female = gender === 'female';
   const body: Record<UnitKind, () => string> = {
     warlord, brute: blackOrc, raider: orcBoy, shaman, goblin, goblinKnight, exile: () => exile(female), totem,
     warden: () => warden(female), ranger: () => ranger(female), blade: () => blade(female), oracle: () => oracle(female), regent,
+    thrall: () => thrall(female), bloodKnight: () => bloodKnightV(female), nightStalker: () => nightStalker(female),
+    bloodMage: () => bloodMage(female), crimsonLord: () => crimsonLord(female),
   };
   return `<svg viewBox="0 0 120 130" width="120" height="130" class="${large ? 'portrait-large' : 'portrait'}" aria-hidden="true">${frame(BANNERS[owner])}${body[kind]()}</svg>`;
 }
